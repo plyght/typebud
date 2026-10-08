@@ -48,7 +48,11 @@ def kbp(x, y):
     return (30 + (x - 30) * KB_S + KB_T[0], 200 + (y - 200) * KB_S + KB_T[1])
 
 
-KB_BL, KB_BR, KB_FL, KB_FR = kbp(80, 146), kbp(220, 182), kbp(30, 188), kbp(170, 224)
+KB_BL, KB_BR, KB_FL, KB_FR = kbp(80, 146), kbp(220, 182), kbp(42.5, 177.5), kbp(182.5, 213.5)
+KB_DEPTH = 12.0 * KB_S
+# everything the keyboard can paint (top face, front and right faces, plus its outline), with margin
+KB_AREA = Polygon([KB_FL, KB_BL, KB_BR, (KB_BR[0], KB_BR[1] + KB_DEPTH),
+                   (KB_FR[0], KB_FR[1] + KB_DEPTH), (KB_FL[0], KB_FL[1] + KB_DEPTH)]).buffer(7, join_style="round")
 
 
 def back_edge_y(x):
@@ -246,6 +250,28 @@ def head_layers(eyes="content", mouth="smile"):
     return out
 
 
+def chin_over_keyboard(sleeping=False):
+    """The bit of the head that overlaps the keyboard, redrawn in the paws layer (which is painted
+    after the keyboard): the chin hangs in front of the board's back edge, so the forelegs that come
+    out from under it never look like they start behind the rim. Identical to the body-layer drawing,
+    so it changes nothing where there is no keyboard."""
+    g = sleep_geom if sleeping else (lambda x: x)
+    head = g(HEAD)
+    area = KB_AREA
+    if head.intersection(area).is_empty:
+        return []
+    # each piece reaches a little further than the one under it, so the antialiased cut edge of one
+    # piece is always covered by the next and no seam shows where the patch ends
+    parts = [fill(poly_d(head.intersection(area)), MAIN),
+             fill(poly_d(g(HEAD_SHADE).intersection(head).intersection(area.buffer(0.8))), SHADE),
+             fill(poly_d(g(MUZZLE).intersection(head).intersection(area.buffer(1.6))), DARK),
+             fill(poly_d(g(MUZZLE_SHADE).intersection(head).intersection(area.buffer(2.4))), DARK_SH)]
+    edge = head.boundary.intersection(area.buffer(3.2))
+    parts.append(f'<path d="{line_d(edge)}" fill="none" stroke="{LINE}" stroke-width="5" '
+                 f'stroke-linecap="butt" stroke-linejoin="round"/>')
+    return parts
+
+
 def face(eyes, mouth):
     out = []
     # blush on the cheeks, outside the snout
@@ -293,11 +319,15 @@ def face(eyes, mouth):
 
 # ---------------------------------------------------------------- body
 BODY_PTS = [(150, 84), (192, 94), (222, 110), (238, 138), (238, 168), (228, 192), (210, 203),
-            (170, 206), (110, 206), (66, 200), (52, 176), (58, 150)]
+            (170, 206), (110, 205), (66, 195), (52, 176), (58, 150)]
+# (the belly's desk line stays tucked behind the foreshortened keyboard's front edge)
 BODY_D, BODY = smooth_poly(BODY_PTS)
 BODY_SHADE = shade_of(BODY, -12, -10, Polygon([(170, 40), (256, 40), (256, 256), (60, 256), (60, 196)]))
 # folded hind leg: the haunch line + a little dark foot by the keyboard corner
-HAUNCH = "M208 134 C193 146 191 172 201 191"
+# (it stops at the keyboard's back edge: the rest would only be hidden under the board, right next
+# to the hugging foreleg in hold, where it read as the leg continuing under the keyboard)
+_KB_TOP = Polygon([KB_FL, KB_FR, KB_BR, KB_BL])
+HAUNCH = line_d(LineString(cubic((208, 134), (193, 146), (191, 172), (201, 191), 40)).difference(_KB_TOP.buffer(1.5)))
 HAUNCH_SHADE_PTS = [(208, 134), (195, 146), (192, 170), (201, 191), (210, 170), (212, 148)]
 HIND_FOOT = (225, 197)
 CHIN_SHADOW = affinity.translate(HEAD, 3, 9)  # the head's cast shadow on the chest and shoulder
@@ -393,7 +423,7 @@ def type_curve(side, paw):
 
 def paws_layer(lstate, rstate, sleeping=False):
     head = sleep_geom(HEAD_ALL) if sleeping else HEAD_ALL
-    out = []
+    out = chin_over_keyboard(sleeping)
     states = [("L", lstate), ("R", rstate)]
     for side, st in states:
         c, rot, rx, ry, _ = paw_state(st, side)
@@ -426,7 +456,7 @@ def hug_paws(kind):
     pl, pr = HUG_PAWS if kind == "hug" else SIP_PAWS
     rl, rr = (-24, 22) if kind == "hug" else (-30, 18)
     clip = HEAD_ALL if kind == "hug" else None
-    out = []
+    out = chin_over_keyboard()
     for side, p in (("L", pl), ("R", pr)):
         out += arm(hug_curve(side, p, kind), clip, 16.0, 13.0, below_kb=True)
     for (cx, cy), rot in ((pl, rl), (pr, rr)):
@@ -487,16 +517,25 @@ HP_RING = """<defs>
 
 
 def headphones_body():
-    band = LineString(cubic((46, 62), (40, 8), (160, 0), (160, 66), 80))
+    """Band over the crown (behind both ears), near cup on the side of the head where the near ear
+    meets it, far cup + far end of the band tucked BEHIND the head: only what clears the head's
+    silhouette is drawn, cut just outside the head outline so nothing sits on the face."""
+    behind = HEAD.buffer(2.6)                       # the head plus its outline
+    band = LineString(cubic((36, 72), (28, 6), (160, 0), (160, 66), 80))
     cut = EARS.buffer(2.6)
-    outer = band.buffer(7, cap_style="round").difference(cut)
-    inner = band.buffer(3.25, cap_style="round").difference(cut.buffer(3.4))
+    # far side (left of the crown): the band runs down behind the head
+    far = Polygon([(0, 0), (70, 0), (70, 256), (0, 256)])
+    hide = unary_union([cut, behind.intersection(far)])
+    outer = band.buffer(7, cap_style="round").difference(hide)
+    inner = band.buffer(3.25, cap_style="round").difference(hide.buffer(3.4))
     hl = LineString(cubic((62, 36), (78, 22), (104, 17), (128, 19), 40)).buffer(1.25).intersection(inner)
+    # far cup: a crescent peeking out past the side of the head, the band end tucked into it
+    cup = ellipse_poly(34, 72, 10, 18, 8)
+    cup_vis = cup.difference(behind)
+    cup_edge = cup.boundary.difference(behind.buffer(0.4))
     return [
-        # far cup: a crescent peeking out past the forehead
-        f'<path d="M48 54 C36 52 30 62 30 72 C30 82 35 90 44 89 C41 82 40 76 40.5 70 C41 63 43.5 58 48 54Z" '
-        f'fill="{HP_SH}" stroke="{G_LINE}" stroke-width="4.5" stroke-linejoin="round"/>',
         fill(poly_d(outer), G_LINE), fill(poly_d(inner), HP_BAND), fill(poly_d(hl), HP_CUP),
+        fill(poly_d(cup_vis), HP_SH), stroke(line_d(cup_edge), 4.5, G_LINE),
         f'<ellipse cx="156" cy="80" rx="11" ry="21" fill="{HP_SH}" stroke="{G_LINE}" stroke-width="4.5"/>',
         f'<ellipse cx="166" cy="81" rx="13" ry="21" fill="{HP_CUP}" stroke="{G_LINE}" stroke-width="4.5"/>',
         f'<ellipse cx="168" cy="81" rx="6.5" ry="13.5" fill="{HP_GLOW}" stroke="url(#hp-ring)" stroke-width="3.5"/>',
@@ -508,7 +547,8 @@ BEANIE_C, BEANIE_SH, BEANIE_RIB = "#7FB8C8", "#5F9BAD", "#4E8798"
 
 
 def beanie_body():
-    cuff_lo = cubic((40, 66), (80, 48), (130, 44), (170, 60), 40)
+    # the cuff sits above the far (left) eye, which is set high on the face
+    cuff_lo = cubic((40, 60), (80, 44), (130, 44), (170, 60), 40)
     cuff_hi = [(x, y - 11) for x, y in cuff_lo]
     top = unary_union([HEAD.buffer(3.5), ellipse_poly(104, 40, 60, 24)])
     dome = top.intersection(Polygon(cuff_lo + [(200, 0), (20, 0)]))
