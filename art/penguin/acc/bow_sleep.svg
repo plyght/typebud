@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- typebud penguin: pink bow on the crown, right of the tuft. Sleep: same item run through the head-tuck warp. -->
+  <g transform="translate(175.9 71) rotate(22)">
+  <path d="M-3 -1 Q-10 -12 -17 -9 Q-21 -1 -17 7 Q-10 9 -3 2Z" fill="#F27C93" stroke="#3B2A1E" stroke-width="4.5" stroke-linejoin="round"/>
+  <path d="M3 -1 Q10 -12 17 -9 Q21 -1 17 7 Q10 9 3 2Z" fill="#F27C93" stroke="#3B2A1E" stroke-width="4.5" stroke-linejoin="round"/>
+  <path d="M6 4 Q12 7 16.5 5.5 L17 7 Q10 9 3 2Z M-13 -7.5 Q-11 -3 -6 -1" fill="#D95E78"/>
+  <path d="M-12 -5 Q-9 -6.5 -6.5 -3 M12 -5 Q9 -6.5 6.5 -3" fill="none" stroke="#3B2A1E" stroke-width="2.2" stroke-linecap="round"/>
+  <ellipse cx="0" cy="0.5" rx="5" ry="5.5" fill="#F27C93" stroke="#3B2A1E" stroke-width="4"/>
+  <circle cx="-1.6" cy="-1.4" r="1.3" fill="#FFFFFF"/>
+  </g>
+</svg>

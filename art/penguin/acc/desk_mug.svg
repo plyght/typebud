@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- penguin copy: shared prop moved by (3 0) so it peeks out beside the tall egg -->
+  <g transform="translate(3 0)">
+  <!-- typebud shared desk mug, front-right of the keyboard on the desk (base y=234). Where the drink rests
+       while typing. Fixed colors. -->
+  <g transform="translate(-2 0)">
+  <path d="M212 196 C208 191 216 188 212 182 M222 196 C218 191 226 188 222 182" fill="none" stroke="#D8C3AA" stroke-width="3" stroke-linecap="round"/>
+  <path d="M228 214 C240 212 240 228 227 228" fill="none" stroke="#3B2A1E" stroke-width="9" stroke-linecap="round"/>
+  <path d="M228 214 C240 212 240 228 227 228" fill="none" stroke="#F7EBDD" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M203 205 L231 205 L229 230 Q217 235 205 230 Z" fill="#F7EBDD" stroke="#3B2A1E" stroke-width="4.5" stroke-linejoin="round"/>
+  <path d="M223 207 L230 207 L228.5 229.5 Q225 231 222 231.5 Z" fill="#E6D5C0"/>
+  <path d="M204 214 L230.3 214 L229.8 220 L204.6 220 Z" fill="#F4A6A0"/>
+  <ellipse cx="217" cy="205" rx="14" ry="3.6" fill="#8A5B3A" stroke="#3B2A1E" stroke-width="3.5"/>
+  </g>
+</g>
+</svg>

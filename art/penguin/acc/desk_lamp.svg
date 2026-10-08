@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- penguin copy: shared prop moved by (-12 10) so it peeks out beside the tall egg -->
+  <g transform="translate(-12 10)">
+  <!-- typebud shared desk lamp, behind the animal on the left of the desk (base y=160), shade aimed at the keyboard. Fixed colors. -->
+  <!-- base -->
+  <ellipse cx="40" cy="158" rx="16" ry="6" fill="#E6B65C" stroke="#3B2A1E" stroke-width="4.5"/>
+  <!-- arms: outlined strokes -->
+  <path d="M40 156 L28 112 L56 80" fill="none" stroke="#3B2A1E" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M40 156 L28 112 L56 80" fill="none" stroke="#F2C46D" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="28" cy="112" r="4.5" fill="#F2C46D" stroke="#3B2A1E" stroke-width="3.5"/>
+  <!-- shade: cone opening toward lower right -->
+  <path d="M48 76 C54 62 68 60 76 66 L88 94 C76 100 60 98 50 90 Z" fill="#F2C46D" stroke="#3B2A1E" stroke-width="4.5" stroke-linejoin="round"/>
+  <path d="M70 64 C74 64 78 68 80 72 L88 94 C84 96 80 97 76 97 Z" fill="#DDA84F"/>
+  <ellipse cx="69" cy="93" rx="19" ry="5.5" transform="rotate(-18 69 93)" fill="#FFF3C4" stroke="#3B2A1E" stroke-width="4"/>
+</g>
+</svg>

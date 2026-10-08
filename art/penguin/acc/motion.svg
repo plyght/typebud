@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- typebud penguin motion marks: dashes around the flapping flipper tips (excited). -->
+  <path d="M40 100 L33 95 M38 114 L30 114 M44 126 L38 131 M236 102 L241 96 M237 116 L243.5 117 M234 132 L238 138" fill="none" stroke="#3B2A1E" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M40 100 L33 95 M38 114 L30 114 M44 126 L38 131 M236 102 L241 96 M237 116 L243.5 117 M234 132 L238 138" fill="none" stroke="#FBE3A0" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

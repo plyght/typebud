@@ -1,0 +1,6 @@
+{
+  "keyboard": {"translate": [30.0, 8.0], "scale": 0.76},
+  "overlays": {"music_notes": [0, 0], "zzz": [2, 6]},
+  "paws": {"left": [102.2, 175.4], "right": [181.5, 197.2]},
+  "head": {"cx": 138, "cy": 86, "rx": 63, "ry": 54}
+}

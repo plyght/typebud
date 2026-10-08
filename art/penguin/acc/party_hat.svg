@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- typebud penguin: little blue party hat perched on the crown. -->
+  <g>
+  <path d="M118.9 49.5 L139.2 51 L160.5 45.4 L161.3 44.8 L161.5 43.8 L161.1 43 L138.2 16 L137.5 15.6 L136.8 15.5 L136.1 15.8 L135.7 16.3 L117.7 47.2 L117.5 47.9 L117.6 48.6 L118.2 49.3Z" fill="#8DC6E8"/>
+  <path d="M138.9 51 L160.4 45.5 L161.2 44.9 L161.5 44 L161.1 43 L138.2 16 L137.7 15.7 L136.9 15.5 L135.9 16 L134.3 18.6 L155.1 43 L155.5 44 L155.2 44.9 L154.5 45.4 L134.5 50.7Z" fill="#6FAED6"/>
+  <path d="M129.9 27.2 L126.2 33.6 L148.6 29.1 L144.5 24.2ZM120.8 43 L118.1 47.6 L118 48.1 L118.3 48.7 L158.9 41.1 L155 36.5Z" fill="#FBE3A0"/>
+  <path d="M118.9 49.5 L139.2 51 L160.5 45.4 L161.3 44.8 L161.5 43.8 L161.1 43 L138.2 16 L137.5 15.6 L136.8 15.5 L136.1 15.8 L135.7 16.3 L117.7 47.2 L117.5 47.9 L117.6 48.6 L118.2 49.3Z" fill="none" stroke="#3B2A1E" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="137" cy="17" r="5" fill="#FBE3A0" stroke="#3B2A1E" stroke-width="3.5"/>
+  <circle cx="128" cy="38" r="2" fill="#F27C93"/><circle cx="146" cy="34" r="2" fill="#F27C93"/>
+  </g>
+</svg>
