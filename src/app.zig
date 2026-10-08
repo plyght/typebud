@@ -27,6 +27,7 @@ const pet_view = @import("pet_view.zig");
 const settings_view = @import("settings_view.zig");
 const clock = @import("clock.zig");
 const pack_import = @import("pack_import.zig");
+const placement = @import("placement.zig");
 
 const App = zpui.App;
 const Window = zpui.Window;
@@ -593,16 +594,8 @@ pub const Typebud = struct {
                 }
             },
             .move => {
-                // Moving towards the anchored corner shrinks that margin.
-                const sx: f32 = switch (self.anchor.corner) {
-                    .top_left, .bottom_left => 1,
-                    else => -1,
-                };
-                const sy: f32 = switch (self.anchor.corner) {
-                    .top_left, .top_right => 1,
-                    else => -1,
-                };
-                self.anchor.margin = .{ .x = @max(0, self.drag_start_margin.x + sx * delta.x), .y = @max(0, self.drag_start_margin.y + sy * delta.y) };
+                const m = placement.dragMargin(fromCorner(self.anchor.corner), .{ .x = self.drag_start_margin.x, .y = self.drag_start_margin.y }, .{ .x = delta.x, .y = delta.y });
+                self.anchor.margin = .{ .x = m.x, .y = m.y };
                 w.setAnchor(self.anchor, self.display_id);
             },
             .none => {},
@@ -636,26 +629,13 @@ pub const Typebud = struct {
             self.settingsChanged();
             return;
         }
-        const p = pointer.?;
-        var best: usize = 0;
-        var best_d: f32 = std.math.floatMax(f32);
-        for (buf[0..n], 0..) |d, i| {
-            const b = d.visible_bounds;
-            const cx = std.math.clamp(p.x, b.origin.x, b.origin.x + b.size.width);
-            const cy = std.math.clamp(p.y, b.origin.y, b.origin.y + b.size.height);
-            const dist = (cx - p.x) * (cx - p.x) + (cy - p.y) * (cy - p.y);
-            if (dist < best_d) {
-                best_d = dist;
-                best = i;
-            }
-        }
-        const b = buf[best].visible_bounds;
-        const left = p.x < b.origin.x + b.size.width / 2;
-        const top = p.y < b.origin.y + b.size.height / 2;
-        self.settings.corner = if (top) (if (left) .top_left else .top_right) else (if (left) .bottom_left else .bottom_right);
+        var rects: [8]placement.Rect = undefined;
+        for (buf[0..n], 0..) |d, i| rects[i] = .{ .x = d.visible_bounds.origin.x, .y = d.visible_bounds.origin.y, .w = d.visible_bounds.size.width, .h = d.visible_bounds.size.height };
+        const s = placement.snap(.{ .x = pointer.?.x, .y = pointer.?.y }, rects[0..n]).?;
+        self.settings.corner = s.corner;
+        self.settings.display = @intCast(s.display);
         self.settings.margin_x = 16;
         self.settings.margin_y = 16;
-        self.settings.display = @intCast(best);
         self.settingsChanged();
     }
 
@@ -789,6 +769,15 @@ pub const Typebud = struct {
 };
 
 pub fn toCorner(c: settings_mod.Corner) platform.OverlayCorner {
+    return switch (c) {
+        .top_left => .top_left,
+        .top_right => .top_right,
+        .bottom_left => .bottom_left,
+        .bottom_right => .bottom_right,
+    };
+}
+
+pub fn fromCorner(c: platform.OverlayCorner) settings_mod.Corner {
     return switch (c) {
         .top_left => .top_left,
         .top_right => .top_right,

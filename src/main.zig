@@ -5,6 +5,7 @@
 //!   typebud --settings   also open the settings window
 //!   typebud --smoke      scripted CI run: screenshots to zig-out/smoke/ (TYPEBUD_SMOKE=1)
 //!   typebud --demo       ~1 minute feature tour for the demo video (TYPEBUD_DEMO=1)
+//!   typebud --import-pack <folder>   import a Mechvibes / MechvibesDX / Thock pack
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -81,6 +82,21 @@ pub fn main(init: std.process.Init) !void {
             const dir = args.next() orelse "packaging/icons";
             try @import("icons.zig").writeAll(gpa, init.io, dir);
             return;
+        } else if (std.mem.eql(u8, a, "--import-pack")) {
+            const src = args.next() orelse {
+                std.debug.print("usage: typebud --import-pack <pack folder>\n", .{});
+                std.process.exit(2);
+            };
+            const cfg = try @import("settings.zig").configDir(gpa, env);
+            defer gpa.free(cfg);
+            const dest = try std.fs.path.join(gpa, &.{ cfg, "packs" });
+            defer gpa.free(dest);
+            const id = @import("pack_import.zig").importPack(gpa, init.io, src, dest) catch |e| {
+                std.debug.print("import failed: {s}\n", .{@import("pack_import.zig").describe(e)});
+                std.process.exit(1);
+            };
+            std.debug.print("imported {s} into {s}\n", .{ id, dest });
+            return;
         } else if (std.mem.startsWith(u8, a, "--typebud-updated-from=")) {} else {
             std.debug.print("usage: typebud [--settings] [--smoke] [--demo] [--version]\n", .{});
             std.process.exit(2);
@@ -110,4 +126,5 @@ test {
     _ = @import("sound.zig");
     _ = @import("visibility.zig");
     _ = @import("pack_import.zig");
+    _ = @import("placement.zig");
 }
