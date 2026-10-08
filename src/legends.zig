@@ -1,7 +1,8 @@
 //! Keycap legends (art/_shared/keyboard_keys.json): drawn with the text system in the
 //! board's own affine frame — glyph x along `u`, glyph up along `v` — like
 //! render_art.py's FreeType path. Layout (glyph ids, origins, matrices) is computed once
-//! per pet size and kept; painting is one transformed glyph sprite per character.
+//! per pet size and kept; painting is one raster-transformed glyph per character (the text
+//! system rasterizes the transformed outline, `place`).
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -192,6 +193,26 @@ pub fn matrix(l: *const Layout, k: usize, origin: [2]f32, stretch: f32, scale: f
     return .{ .rotation_scale = r, .translation = .{ qx - (r[0][0] * px + r[0][1] * py), qy - (r[1][0] * px + r[1][1] * py) } };
 }
 
+/// Where a legend glyph lands when the pet's top-left is at `origin` (logical px) and the
+/// layout is drawn `stretch` times its built size: its baseline origin moved through the
+/// key's matrix about the key centre (logical px), and the outline transform the rasterizer
+/// applies about that origin (glyph x -> u, glyph up -> v, scaled by `stretch`).
+pub const Placed = struct { origin: [2]f32, rt: text.RasterTransform };
+
+pub fn place(l: *const Layout, g: Glyph, origin: [2]f32, stretch: f32) Placed {
+    const x = l.xforms[g.key];
+    const r: [2][2]f32 = .{ .{ x.m[0][0] * stretch, x.m[0][1] * stretch }, .{ x.m[1][0] * stretch, x.m[1][1] * stretch } };
+    const dx = g.origin[0] - x.pivot[0];
+    const dy = g.origin[1] - x.pivot[1];
+    return .{
+        .origin = .{
+            origin[0] + x.pivot[0] * stretch + r[0][0] * dx + r[0][1] * dy,
+            origin[1] + x.pivot[1] * stretch + r[1][0] * dx + r[1][1] * dy,
+        },
+        .rt = (text.RasterTransform{ .a = r[0][0], .b = r[1][0], .c = r[0][1], .d = r[1][1] }).canonical(),
+    };
+}
+
 test "keys parse with the OS modifier row" {
     var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
     defer arena.deinit();
@@ -205,6 +226,26 @@ test "keys parse with the OS modifier row" {
     var has_super = false;
     for (lin.keys[0..lin.len]) |k| has_super = has_super or std.mem.eql(u8, k.label[0..k.label_len], "super");
     try std.testing.expect(has_super);
+}
+
+test "placed legend glyphs match the composited sprite matrix" {
+    var l: Layout = .{};
+    l.xforms[0] = .{ .m = .{ .{ 0.5, 0.2 }, .{ -0.1, 0.9 } }, .pivot = .{ 40, 30 } };
+    const g: Glyph = .{ .id = 1, .origin = .{ 33, 34 }, .key = 0 };
+    for ([_]f32{ 1, 1.5 }) |stretch| {
+        const scale: f32 = 2;
+        const t = matrix(&l, 0, .{ 10, 5 }, stretch, scale);
+        const at = place(&l, g, .{ 10, 5 }, stretch);
+        // The glyph origin goes where the sprite matrix sends it (device px).
+        const o = t.apply(.{ .x = (10 + g.origin[0]) * scale, .y = (5 + g.origin[1]) * scale });
+        try std.testing.expectApproxEqAbs(o.x, at.origin[0] * scale, 1e-3);
+        try std.testing.expectApproxEqAbs(o.y, at.origin[1] * scale, 1e-3);
+        // A point 3 px right / 2 px up of the glyph origin moves through the same linear part.
+        const p = t.apply(.{ .x = (10 + g.origin[0]) * scale + 3, .y = (5 + g.origin[1]) * scale - 2 });
+        const q = at.rt.apply(.{ .x = 3, .y = -2 });
+        try std.testing.expectApproxEqAbs(p.x, at.origin[0] * scale + q.x, 1e-3);
+        try std.testing.expectApproxEqAbs(p.y, at.origin[1] * scale + q.y, 1e-3);
+    }
 }
 
 test "legend matrix pivots on the key centre" {

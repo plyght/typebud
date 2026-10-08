@@ -10,6 +10,7 @@ const legends = @import("legends.zig");
 
 const Bounds = zpui.Bounds(zpui.Pixels);
 const TransformationMatrix = zpui.scene.TransformationMatrix;
+const RasterTransform = zpui.text.RasterTransform;
 const Hsla = zpui.Hsla;
 
 /// Where pixels go. `scale` is device px per logical px.
@@ -17,7 +18,9 @@ pub const Painter = struct {
     ctx: *anyopaque,
     scale: f32,
     image: *const fn (ctx: *anyopaque, bounds: Bounds, img: *zpui.RenderImage, opacity: f32) void,
-    glyph: *const fn (ctx: *anyopaque, origin: zpui.Point(zpui.Pixels), font_id: zpui.text.FontId, glyph_id: zpui.text.GlyphId, font_size: f32, color: Hsla, t: TransformationMatrix) void,
+    /// A legend glyph whose baseline `origin` (logical px) is already placed on the key and
+    /// whose outline maps through `rt` (glyph x -> u, glyph up -> v, device space).
+    glyph: *const fn (ctx: *anyopaque, origin: zpui.Point(zpui.Pixels), font_id: zpui.text.FontId, glyph_id: zpui.text.GlyphId, font_size: f32, color: Hsla, rt: RasterTransform) void,
 };
 
 /// Small per-frame body motion (viewBox units), applied to the `body` group only.
@@ -95,14 +98,9 @@ fn paintLegends(pet: Pet, ctx: Context, p: Painter) void {
     if (!l.valid or l.glyph_len == 0) return;
     const stretch = pet.size / l.size;
     const color = ctx.legend_colors[@intFromEnum(pet.vibe)];
-    var last_key: usize = std.math.maxInt(usize);
-    var t: TransformationMatrix = .{};
     for (l.glyphs[0..l.glyph_len]) |g| {
-        if (g.key != last_key) {
-            last_key = g.key;
-            t = legends.matrix(l, g.key, pet.origin, stretch, p.scale);
-        }
-        p.glyph(p.ctx, .{ .x = pet.origin[0] + g.origin[0], .y = pet.origin[1] + g.origin[1] }, l.font_id, g.id, l.font_size, color, t);
+        const at = legends.place(l, g, pet.origin, stretch);
+        p.glyph(p.ctx, .{ .x = at.origin[0], .y = at.origin[1] }, l.font_id, g.id, l.font_size, color, at.rt);
     }
 }
 
@@ -169,16 +167,29 @@ pub const WindowPainter = struct {
         _ = opacity;
         self.window.paintImage(b, .all(0), img, 0, false);
     }
-    fn glyph(ctx: *anyopaque, origin: zpui.Point(zpui.Pixels), font_id: zpui.text.FontId, glyph_id: zpui.text.GlyphId, font_size: f32, color: Hsla, t: TransformationMatrix) void {
+    fn glyph(ctx: *anyopaque, origin: zpui.Point(zpui.Pixels), font_id: zpui.text.FontId, glyph_id: zpui.text.GlyphId, font_size: f32, color: Hsla, rt: RasterTransform) void {
         const self: *WindowPainter = @ptrCast(@alignCast(ctx));
-        paintLegendGlyph(self.window, origin, font_id, glyph_id, font_size, color, t);
+        paintLegendGlyph(self.window, origin, font_id, glyph_id, font_size, color, rt);
     }
 };
 
-/// The one place legends reach zpui: swap to `paintGlyphRasterTransformed` (glyph outlines
-/// transformed before rasterization) once zpui main has it.
-pub fn paintLegendGlyph(w: *zpui.Window, origin: zpui.Point(zpui.Pixels), font_id: zpui.text.FontId, glyph_id: zpui.text.GlyphId, font_size: f32, color: Hsla, t: TransformationMatrix) void {
-    w.paintGlyphTransformed(origin, font_id, glyph_id, font_size, color, t, 0);
+/// The one place legends reach zpui. The text system rasterizes the sheared, foreshortened
+/// outline itself (CoreText CTM / FreeType FT_Set_Transform / DirectWrite DWRITE_MATRIX),
+/// so legends stay crisp on the angled board. A text system without raster transforms gets
+/// the upright raster stretched by the same matrix about the baseline origin.
+pub fn paintLegendGlyph(w: *zpui.Window, origin: zpui.Point(zpui.Pixels), font_id: zpui.text.FontId, glyph_id: zpui.text.GlyphId, font_size: f32, color: Hsla, rt: RasterTransform) void {
+    if (w.text_system.text_system.platform.vtable.raster_transforms) {
+        w.paintGlyphRasterTransformed(origin, font_id, glyph_id, font_size, color, rt);
+    } else {
+        const s = w.scaleFactor();
+        w.paintGlyphTransformed(origin, font_id, glyph_id, font_size, color, compositeMatrix(rt, .{ .x = origin.x * s, .y = origin.y * s }), 0);
+    }
+}
+
+/// `rt` about the device point `o`, applied at composite time (the fallback path).
+pub fn compositeMatrix(rt: RasterTransform, o: zpui.Point(f32)) TransformationMatrix {
+    const r: [2][2]f32 = .{ .{ rt.a, rt.c }, .{ rt.b, rt.d } };
+    return .{ .rotation_scale = r, .translation = .{ o.x - (r[0][0] * o.x + r[0][1] * o.y), o.y - (r[1][0] * o.x + r[1][1] * o.y) } };
 }
 
 /// Paints straight into a `Scene` whose sprites live in `atlas` (offscreen renders).
@@ -207,16 +218,20 @@ pub const ScenePainter = struct {
             .opacity = opacity,
         }) catch {};
     }
-    fn glyph(ctx: *anyopaque, origin: zpui.Point(zpui.Pixels), font_id: zpui.text.FontId, glyph_id: zpui.text.GlyphId, font_size: f32, color: Hsla, t: TransformationMatrix) void {
+    fn glyph(ctx: *anyopaque, origin: zpui.Point(zpui.Pixels), font_id: zpui.text.FontId, glyph_id: zpui.text.GlyphId, font_size: f32, color: Hsla, rt: RasterTransform) void {
         const self: *ScenePainter = @ptrCast(@alignCast(ctx));
-        const g = zpui.text.line.glyphRenderParams(font_id, glyph_id, font_size, origin, self.scale, false);
+        var g = zpui.text.line.glyphRenderParams(font_id, glyph_id, font_size, origin, self.scale, false);
+        // Same choice as `paintLegendGlyph`: outline transformed by the rasterizer, or the
+        // upright raster stretched at composite time.
+        const outline = self.text_system.platform.vtable.raster_transforms;
+        if (outline) g.params.raster_transform = rt.canonical();
         const sprite = (self.text_system.rasterizeToAtlas(self.atlas, g.params, g.origin) catch return) orelse return;
         self.scene.insertMonochromeSprite(self.gpa, .{
             .bounds = sprite.bounds,
             .content_mask = self.clip,
             .color = color,
             .tile = sprite.tile,
-            .transformation = t,
+            .transformation = if (outline) .{} else compositeMatrix(rt, .{ .x = origin.x * self.scale, .y = origin.y * self.scale }),
         }) catch {};
     }
 };
