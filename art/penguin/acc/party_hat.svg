@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- typebud penguin party_hat, fitted to the penguin head (center 152,80; rx 57, ry 46). -->
+  <g>
+    <path d="M111 50 L101.8 33.4 Q101 32 104.7 32.4 L147 37 Q131 50 111 50 Z" fill="#8FD3F4"/>
+    <path d="M140.1 36.2 L107.9 32.8 L106.7 33.8 L136.9 40.6 Z" fill="#68B6DE"/>
+    <path d="M108.8 46 Q124.4 46 136.9 35.9 M105.5 40.1 Q114.5 40.1 121.7 34.2 " fill="none" stroke="#F497B4" stroke-width="6" stroke-linecap="round"/>
+    <path d="M111 50 L101.8 33.4 Q101 32 104.7 32.4 L147 37 Q131 50 111 50 Z" fill="none" stroke="#3B2A1E" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="101" cy="32" r="5" fill="#FBE3A0" stroke="#3B2A1E" stroke-width="3.5"/>
+  </g>
+</svg>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- typebud penguin, excited flippers (drawn after the keyboard). -->
+  <path d="M96 110 C87 132 99 144 109 159 L132 154 C127 140 128 132 124 114 Z" fill="#6B4A33"/>
+  <path d="M96 110 C87 132 99 144 109 159 M132 154 C127 140 128 132 124 114" fill="none" stroke="#3B2A1E" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <ellipse cx="121" cy="156" rx="13" ry="9" transform="rotate(-16 121 156)" fill="#6B4A33" stroke="#3B2A1E" stroke-width="4.5"/>
+  <path d="M113.8 154.7 Q116.5 151.1 121.7 151.1" transform="rotate(-16 121 156)" fill="none" stroke="#B07A4A" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M208 114 C215 140 187 158 172 173 L149 167 C153 150 178 136 182 118 Z" fill="#6B4A33"/>
+  <path d="M208 114 C215 140 187 158 172 173 M149 167 C153 150 178 136 182 118" fill="none" stroke="#3B2A1E" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <ellipse cx="161" cy="168" rx="13" ry="9" transform="rotate(30 161 168)" fill="#6B4A33" stroke="#3B2A1E" stroke-width="4.5"/>
+  <path d="M153.8 166.7 Q156.4 163.1 161.7 163.1" transform="rotate(30 161 168)" fill="none" stroke="#B07A4A" stroke-width="2.5" stroke-linecap="round"/>
+</svg>
