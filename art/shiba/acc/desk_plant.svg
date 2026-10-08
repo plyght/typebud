@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
-  <!-- typebud shared desk plant, shiba copy: raised so the leaves show above the curled tail (pot hidden behind it). Fixed colors. -->
-  <g transform="translate(-1 -18)">
+  <!-- typebud shared desk plant, shiba copy: moved to the back left beside the shoulder (the tail curl fills the right). Fixed colors. -->
+  <g transform="translate(-160 -8)">
   <!-- leaves -->
   <path d="M222 158 C206 156 200 140 204 128 C214 130 224 142 222 158 Z" fill="#8CC084" stroke="#3B2A1E" stroke-width="4" stroke-linejoin="round"/>
   <path d="M224 158 C222 140 228 124 238 118 C242 132 238 150 224 158 Z" fill="#8CC084" stroke="#3B2A1E" stroke-width="4" stroke-linejoin="round"/>

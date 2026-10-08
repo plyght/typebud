@@ -6,7 +6,16 @@
     ],
     "scale": 1.0
   },
-  "overlays": {},
+  "overlays": {
+    "zzz": [
+      -21,
+      -12
+    ],
+    "music_notes": [
+      8,
+      -8
+    ]
+  },
   "paws": {
     "left": [
       123,

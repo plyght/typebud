@@ -190,11 +190,13 @@ def eye_dot(x, y, rx=4.3, ry=5.4):
 
 # ---------------------------------------------------------------- head geometry
 HX, HY = 148.0, 84.0
-SLEEP_T = "translate(-3 30) rotate(-8 148 84)"
+# the dropped head stays just above the keyboard's back edge, so the chin never slips under the board
+SLEEP_DY = 26
+SLEEP_T = f"translate(-3 {SLEEP_DY}) rotate(-8 148 84)"
 
 
 def sleep_geom(g):
-    return affinity.translate(affinity.rotate(g, -8, origin=(148, 84)), -3, 30)
+    return affinity.translate(affinity.rotate(g, -8, origin=(148, 84)), -3, SLEEP_DY)
 
 
 # Fox-like wedge: round crown, cheeks flaring out into two soft fluff tufts, tapering to the muzzle.
@@ -300,8 +302,8 @@ def face(eyes, mouth):
 
 # ---------------------------------------------------------------- body + tail
 BODY_PTS = [
-    (118, 120), (106, 124), (98, 132), (95, 142), (95, 151), (92, 166), (86, 186), (89, 203),
-    (104, 212), (152, 216), (198, 213), (213, 204), (217, 187), (212, 166), (211, 150), (208, 134),
+    (118, 120), (106, 124), (98, 132), (95, 142), (95, 151), (92, 166), (87, 184), (90, 198),
+    (106, 205), (152, 210), (198, 208), (213, 201), (217, 187), (212, 166), (211, 150), (208, 134),
     (199, 124), (184, 118),
 ]
 BODY = blob(BODY_PTS, 10)
@@ -316,8 +318,10 @@ BIB_SHADE = BIB.difference(affinity.translate(BIB, -7, -2)).intersection(Point(1
 # fluffy shadow of the head on the ruff
 CHIN_SHADOW = blob([(116, 122), (180, 122), (182, 132), (172, 138), (163, 135), (154, 141),
                     (145, 136), (136, 141), (127, 136), (117, 134)], 8).intersection(BIB)
-RUFF_LINES = "M106 141 Q103 146 105 150 M101 178 Q96 192 105 204 M203 180 Q209 194 199 205"
-FEET = [(113, 211), (190, 212)]
+RUFF_LINES = "M101 178 Q96 190 104 199 M205 187 Q208.5 194 201 200"
+# feet and the bottom of the body stay behind the foreshortened keyboard (they still read with the
+# keyboard turned off)
+FEET = [(126, 207), (190, 207)]
 
 
 def body_layers():
@@ -337,9 +341,11 @@ TAIL_POSE = {
     "type_left": 3, "type_right": -3, "type_both": 0,
     "excited": 9, "sleep": -5, "wake": -5,
 }
+# the excited wag also slides the curl in a little so it stays inside the x <= 240 safe edge
+TAIL_SHIFT = {"excited": (-3.5, 0)}
 
 
-def tail_geom(rot):
+def tail_geom(rot, shift=(0, 0)):
     cx, cy = TAIL_C
     n = 16
     pts = []
@@ -359,17 +365,23 @@ def tail_geom(rot):
         sp.append((cx + r * math.cos(a), cy + r * math.sin(a)))
     spiral = LineString(sp)
     cream = Point(cx - 1, cy + 1).buffer(11).intersection(disc)
-    rotf = lambda g: affinity.rotate(g, rot, origin=TAIL_PIVOT)
+    rotf = lambda g: affinity.translate(affinity.rotate(g, rot, origin=TAIL_PIVOT), *shift)
     return rotf(t), rotf(disc), rotf(cream), rotf(spiral)
 
 
 def tail(frame):
-    t, disc, cream, spiral = tail_geom(TAIL_POSE[frame])
-    # the base hides behind the body; only the curl lies over the flank
-    vis = t.difference(BODY.difference(disc.buffer(1)))
-    shade = vis.difference(affinity.translate(vis, -6, -5)).difference(cream)
+    t, disc, cream, spiral = tail_geom(TAIL_POSE[frame], TAIL_SHIFT.get(frame, (0, 0)))
+    # the base hides behind the body; only the curl lies over the flank. The base stops at the outer
+    # edge of the body outline, so that line stays whole and meets the curl without a notch.
+    outside = t.difference(BODY.buffer(2.0)).difference(disc)
+    vis = unary_union([disc, outside])
+    # shade offset from a smooth round copy, so its inner edge doesn't zig-zag with the fluff scallops
+    c = disc.centroid
+    smooth = unary_union([Point(c.x, c.y).buffer(TAIL_R + 1.6, resolution=32), outside])
+    shade = vis.difference(affinity.translate(smooth, -6, -5)).difference(cream)
     d = poly_d(vis)
-    edge = vis.boundary.difference(BODY.buffer(-2.5).difference(disc.buffer(3)))
+    edge = unary_union([disc.boundary.difference(t.difference(BODY).difference(disc).buffer(0.6)),
+                        outside.boundary.difference(BODY.buffer(2.4)).difference(disc.buffer(0.6))])
     return [fill(d, MAIN), fill(poly_d(shade), SHADE), fill(poly_d(cream), LIGHT),
             fill(poly_d(cream.difference(affinity.translate(cream, -3, -3))), LIGHT_SH),
             stroke(line_d(merge_lines(edge)), 5), stroke(line_d(spiral), 3.5)]
@@ -407,40 +419,60 @@ def arm_curve(side, paw, kind="type"):
         return cubic((sx, sy), (sx + 3, sy + 14), (px + 7, py - 12), (px, py), 24)
     if kind == "hug":
         if side == "L":
-            return cubic((114, 134), (108, 154), (122, 164), paw, 24)
+            return cubic((122, 135), (113, 153), (124, 163), paw, 24)
         return cubic((194, 136), (197, 150), (186, 154), paw, 24)
     if kind == "sip":
+        # forearms folded up from elbows tucked against the chest
         if side == "L":
-            return cubic((114, 146), (108, 138), (116, 132), paw, 24)
-        return cubic((188, 142), (198, 150), (180, 132), paw, 24)
+            return cubic((122, 135), (112, 151), (118, 157), paw, 24)
+        return cubic((194, 136), (198, 152), (176, 156), paw, 24)
     raise ValueError(kind)
 
 
 KB_BACK = lambda off: Polygon([(0, 146 + KB_DY + 0.257 * -80 + off), (256, 146 + KB_DY + 0.257 * 176 + off), (256, 256), (0, 256)])
 
 
-def arm(curve, head_clip, r0=14.0, r1=12.5, sock=True, below_kb=False):
+def arm(curve, head_clip, r0=14.0, r1=12.5, sock=True, below_kb=False, tail_disc=None, in_body=False, cap_only=False):
     poly = tube(curve, r0, r1)
+    if in_body:
+        # hugging arms stay inside the body silhouette, so the body outline doubles as their outer edge
+        poly = poly.intersection(BODY.buffer(-1.0))
     sx, sy = curve[0]
     root = Point(sx, sy).buffer(r0 + 1.2)
+    if cap_only:
+        # folded forearm: keep the whole contour; the head, body and tail cuts below end it cleanly
+        root = Polygon()
     if head_clip is not None:
         poly = poly.difference(head_clip.buffer(2.0))
+    full = poly
+    if tail_disc is not None:
+        # the shoulder tucks behind the tail curl, so the arm contour ends on the curl's outline
+        # instead of running alongside it
+        poly = poly.difference(tail_disc.buffer(2.5))
     if below_kb:
         poly = poly.difference(KB_BACK(-3))
     # cream socks on the lower leg (urajiro)
     sk = poly.intersection(Point(curve[-1]).buffer(15)) if sock else Polygon()
-    shade = poly.difference(affinity.translate(poly, -5, -2)).difference(sk)
+    shade = full.difference(affinity.translate(full, -5, -2)).difference(sk).intersection(poly)
     edge = poly.boundary.difference(root)
     if below_kb:
         edge = edge.difference(KB_BACK(-4))
     if head_clip is not None:
         edge = edge.difference(head_clip.buffer(3.4))
+    if tail_disc is not None:
+        edge = edge.difference(tail_disc.buffer(2.6))
+    if in_body:
+        edge = edge.difference(BODY.exterior.buffer(2.2))
     sk_line = Point(curve[-1]).buffer(15).exterior.intersection(poly.buffer(-2.6)) if sock else None
     d = poly_d(poly)
     out = [fill(d, MAIN), fill(poly_d(shade), SHADE), fill(poly_d(sk), LIGHT)]
     if sock:
         out.append(fill(poly_d(sk.difference(affinity.translate(sk, -4, -1))), LIGHT_SH))
-    out.append(stroke(line_d(merge_lines(edge)), 5))
+    # drop leftover nubs of contour (a few units long) that read as stray marks
+    edge = merge_lines(edge)
+    if edge.geom_type == "MultiLineString":
+        edge = MultiLineString([g for g in edge.geoms if g.length >= 5])
+    out.append(stroke(line_d(edge), 5))
     return out
 
 
@@ -468,32 +500,38 @@ def paw_shape(c, rot, rx, ry, deco):
     return out
 
 
-def paws_layer(lstate, rstate, sleeping=False):
+def tail_disc(frame):
+    return tail_geom(TAIL_POSE[frame], TAIL_SHIFT.get(frame, (0, 0)))[1]
+
+
+def paws_layer(lstate, rstate, frame, sleeping=False):
     head = sleep_geom(FACE) if sleeping else FACE
     out = []
     states = (("L", lstate), ("R", rstate))
     for side, st in states:
         c, *_ = paw_state(st, side)
-        out += arm(arm_curve(side, c), head)
+        out += arm(arm_curve(side, c), head, tail_disc=tail_disc(frame) if side == "R" else None)
     for side, st in states:
         out += paw_shape(*paw_state(st, side))
     return out
 
 
 HUG_PAWS = ((136, 156), (170, 150))
-SIP_PAWS = ((121, 136), (156, 132))
+SIP_PAWS = ((126, 146), (157, 140))
 HOLD_T = "translate(152 146) rotate(8)"
-SIP_T = (135, 124, -20)
+SIP_T = (140, 138, -12)     # lid just under the nose, at the mouth; the nose and eyes stay clear
 
 
 def hug_paws(kind):
     if kind == "hug":
         (pl, pr), (rl, rr), clip = HUG_PAWS, (-20, 20), FACE
     else:
-        (pl, pr), (rl, rr), clip = SIP_PAWS, (-30, 15), None
+        (pl, pr), (rl, rr), clip = SIP_PAWS, (-30, 15), FACE
     out = []
-    out += arm(arm_curve("L", pl, kind), clip, 13.5, 11.5, sock=False, below_kb=True)
-    out += arm(arm_curve("R", pr, kind), clip, 13.5, 11.5, sock=False, below_kb=True)
+    out += arm(arm_curve("L", pl, kind), clip, 13.5, 11.5, sock=False, below_kb=True, in_body=True,
+               cap_only=kind == "sip")
+    out += arm(arm_curve("R", pr, kind), clip, 13.5, 11.5, sock=False, below_kb=True, tail_disc=tail_disc("hold"),
+               in_body=True, cap_only=kind == "sip")
     for (cx, cy), rot in ((pl, rl), (pr, rr)):
         out.append(f'<ellipse cx="{cx}" cy="{cy}" rx="11.5" ry="9.5" transform="rotate({rot} {cx} {cy})" '
                    f'fill="{LIGHT}" stroke="{LINE}" stroke-width="4.5"/>')
@@ -530,7 +568,7 @@ def build_frames():
               f"typebud shiba (Kinako): {name}. Tail, body, head, ears, face; no forearms (see {name}_paws.svg).")
         if paws is None:
             continue
-        pb = hug_paws(paws) if paws in ("hug", "sip") else paws_layer(*paws, sleeping=sleeping)
+        pb = hug_paws(paws) if paws in ("hug", "sip") else paws_layer(*paws, name, sleeping=sleeping)
         write(OUT / f"{name}_paws.svg", pb,
               f"typebud shiba (Kinako): forearms + paws for {name}, drawn after the keyboard.")
 
@@ -549,14 +587,23 @@ HP_RING = """<defs>
 
 
 def headphones_body():
-    band = LineString(cubic((84, 84), (82, 30), (214, 24), (210, 80), 80))
-    cut = EARS_ALL.buffer(2.6)
+    # band ends sit well outside the ear edges, so no thin sliver of band is left between ear and cup
+    band = LineString(cubic((77, 86), (76, 28), (220, 22), (218, 82), 80))
+    # the far (left) side of the band and its cup sit behind the head: cut them at the outer edge of
+    # the head outline so only the part beyond the cheek shows
+    behind = FACE.buffer(2.5).intersection(Polygon([(0, 0), (100, 0), (100, 256), (0, 256)]))
+    cut = EARS_ALL.buffer(2.6).union(behind).buffer(4).buffer(-4)
     outer = band.buffer(7, cap_style="round").difference(cut)
     inner = band.buffer(3.25, cap_style="round").difference(cut.buffer(3.4))
+    # drop slivers left in the corner between the ear and the cheek
+    outer = outer.buffer(-2.5).buffer(2.5).intersection(outer)
+    inner = inner.buffer(-1.2).buffer(1.2).intersection(inner)
     hl = LineString(cubic((104, 50), (122, 38), (150, 34), (176, 38), 40)).buffer(1.25).intersection(inner)
+    far = ellipse_poly(79, 91, 11, 21.5, 6)
+    far_vis = far.difference(behind)
+    far_edge = far.boundary.difference(FACE.buffer(2.4))
     return [
-        f'<path d="M89 68 C77 67 71 80 71 90 C71 100 77 110 90 107 C86 100 85 94 85 88 C85 81 86 75 89 68Z" '
-        f'fill="{HP_SH}" stroke="{G_LINE}" stroke-width="4.5" stroke-linejoin="round"/>',
+        fill(poly_d(far_vis), HP_SH), stroke(line_d(merge_lines(far_edge)), 4.5, G_LINE),
         fill(poly_d(outer), G_LINE), fill(poly_d(inner), HP_BAND), fill(poly_d(hl), HP_CUP),
         f'<ellipse cx="206" cy="92" rx="11" ry="22" fill="{HP_SH}" stroke="{G_LINE}" stroke-width="4.5"/>',
         f'<ellipse cx="216" cy="93" rx="13" ry="22" fill="{HP_CUP}" stroke="{G_LINE}" stroke-width="4.5"/>',
@@ -573,10 +620,16 @@ def beanie_body():
     cuff_lo = cubic((80, 76), (116, 57), (180, 55), (216, 76), 40)
     cuff_hi = [(x, y - 12) for x, y in cuff_lo]
     dome = ellipse_poly(HX, 74, 60, 38, res=64)
-    pockets = EARS_ALL.buffer(3.2)
-    above = Polygon(cuff_lo + [(240, 0), (56, 0)])
-    hat = unary_union([dome, pockets]).buffer(7, join_style="round").buffer(-7, join_style="round").intersection(above)
+    # soft knit outline drawn as one smooth curve (walls lean in a touch, round pocket tips, a gentle
+    # sag to the pompom) instead of ear-shaped pockets with straight sides
+    half = [(81.5, 80), (82.5, 58), (84, 38), (86.5, 22), (91.5, 13.5), (100, 14.5), (114, 22.5), (131, 30.5)]
+    outline = half + [(148.5, 34)] + [(297 - x, y) for x, y in reversed(half)]
+    hat = Polygon(catmull(outline + [(219, 96), (78, 96)], 10, closed=True)).buffer(0)
+    hat = unary_union([hat, dome]).intersection(Polygon(cuff_lo + [(240, 0), (56, 0)]))
+    assert hat.buffer(0.3).contains(EARS_ALL.buffer(1.2).intersection(Polygon(cuff_lo + [(240, 0), (56, 0)]))), \
+        "beanie must cover the ears"
     cuff = Polygon(cuff_lo + cuff_hi[::-1]).buffer(1.2).intersection(hat.buffer(0.6))
+    cuff = cuff.buffer(-3.5, join_style="round").buffer(3.5, join_style="round")
     hat = unary_union([hat, cuff])
     shade = hat.difference(affinity.translate(hat, -7, -3)).difference(cuff)
     cuff_sh = cuff.difference(affinity.translate(cuff, -6, -2))
@@ -657,17 +710,22 @@ def build_acc():
               f"typebud shiba: {note} Sleep: same drawing in the sleep head transform.")
 
 
+PLANT_DX, PLANT_DY = -160, -8
+
+
 def build_props():
     # the curl sits where the shared plant stands: raise the plant so its leaves rise above the tail
     src = (SHARED / "desk_plant.svg").read_text()
-    src = src.replace('<g transform="translate(-2 0)">', f'<g transform="translate(-1 {-24 + KB_DY})">', 1)
+    # the tail curl fills the shared spot on the right, so the plant moves to the back left, between
+    # the lamp and the shoulder, with its pot just behind the keyboard's back-left edge
+    src = src.replace('<g transform="translate(-2 0)">', f'<g transform="translate({PLANT_DX} {PLANT_DY})">', 1)
     src = src.replace("behind the animal on the right of the desk (pot base y=180)",
-                      "shiba copy: raised so the leaves show above the curled tail (pot hidden behind it)")
+                      "shiba copy: moved to the back left beside the shoulder (the tail curl fills the right)")
     (ACC / "desk_plant.svg").write_text(src)
     # excited: the shared paw dashes (moved with the keyboard) + two wag marks beside the bouncing curl
     paws_d = ("M101 155 L95 151 M106 146 L102 140 M99 167 L92 167 M181 185 L188 187 M178 196 L183 201 "
               "M175 168 L180 163")
-    wag_d = "M232 124 L236.5 118.5 M237 173 L242.5 176.5"
+    wag_d = "M228.5 124 L233 118.5 M233.5 173 L239 176.5"
     write(ACC / "motion.svg", [
         f'<g transform="translate(1 {KB_DY})">', stroke(paws_d, 7), stroke(paws_d, 2.6, CREAM), "</g>",
         stroke(wag_d, 7), stroke(wag_d, 2.6, CREAM)],
@@ -741,7 +799,8 @@ def build_icons():
 
 ANCHORS = {
     "keyboard": {"translate": [0, KB_DY], "scale": 1.0},
-    "overlays": {},
+    # z's clear of the dropped left ear (and the beanie); notes clear of the tall right ear
+    "overlays": {"zzz": [-21, -12], "music_notes": [8, -8]},
     "paws": {"left": list(REST["L"]), "right": list(REST["R"])},
     "head": {"cx": 148, "cy": 86, "rx": 70, "ry": 48},
 }

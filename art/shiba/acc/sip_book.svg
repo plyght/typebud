@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
   <!-- typebud shared held book, hugged closed with the cover facing out. Drawn around (0,0); move/tilt with
        the group transform. Hug anchor = translate(164 140), tilt -8deg. -->
-  <g transform="translate(135 124) rotate(-20)">
+  <g transform="translate(140 138) rotate(-12)">
     <!-- page block (top + right edge, 3/4 thickness) -->
     <path d="M-17 -21 L-12 -25 L21 -25 L21 19 L16 23 Z" fill="#FFF8EE" stroke="#3B2A1E" stroke-width="4.5" stroke-linejoin="round"/>
     <path d="M-10 -22.5 L18 -22.5 M18 -21 L18 17" stroke="#E2D3BE" stroke-width="2" stroke-linecap="round"/>
