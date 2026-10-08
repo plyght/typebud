@@ -13,13 +13,15 @@ OUT = Path(__file__).resolve().parent.parent / "art" / "_shared" / "keyboard.svg
 KEYS_OUT = OUT.with_name("keyboard_keys.json")
 
 # Case top face corners (see SPEC "Canvas geometry").
-FL = (30.0, 188.0)        # front-left
-FR = (170.0, 224.0)       # front-right
+# The back edge (where the animals' paws rest) is fixed; the front edge sits a quarter of the old
+# depth closer so rows are foreshortened like a board seen from above, not stretched.
+FL = (42.5, 177.5)        # front-left
+FR = (182.5, 213.5)       # front-right
 BL = (80.0, 146.0)        # back-left
 DEPTH = 12.0              # case thickness (front and right faces drop straight down)
 # Key grid inside the case, in key units.
 COLS, ROWS = 15.0, 5.0
-MARGIN_S, MARGIN_FRONT, MARGIN_BACK = 0.42, 0.42, 0.30
+MARGIN_S, MARGIN_FRONT, MARGIN_BACK = 0.42, 0.36, 0.60
 SPAN_S = COLS + 2 * MARGIN_S
 SPAN_T = ROWS + MARGIN_FRONT + MARGIN_BACK
 U = ((FR[0] - FL[0]) / SPAN_S, (FR[1] - FL[1]) / SPAN_S)
@@ -58,6 +60,7 @@ LINE_MAIN, LINE_KEY = 4.5, 2.0
 # theme token placeholders (art/_shared/themes.json)
 GEAR_LINE, KB_CASE, KB_CASE_HI, KB_SIDE, KB_SIDE_DARK = "#22252C", "#3A3F4B", "#4A505E", "#262A33", "#1E2129"
 KEYCAP, KEYCAP_SIDE, KEYCAP_LEGEND = "#454B59", "#2C313B", "#B8C0CC"
+KEYCAP_FRONT = "#363B47"
 
 
 def P(s, t, dy=0.0):
@@ -71,6 +74,20 @@ def case(s, t, dy=0.0):
     """Case-unit coordinates (0..1 along each case edge) to viewBox."""
     return (FL[0] + s * SPAN_S * U[0] + t * SPAN_T * V[0],
             FL[1] + s * SPAN_S * U[1] + t * SPAN_T * V[1] + dy)
+
+
+def hull(pts):
+    """Convex hull (monotone chain), counter-clockwise."""
+    pts = sorted(set(pts))
+    def half(seq):
+        out = []
+        for p in seq:
+            while len(out) >= 2 and ((out[-1][0] - out[-2][0]) * (p[1] - out[-2][1]) - (out[-1][1] - out[-2][1]) * (p[0] - out[-2][0])) <= 0:
+                out.pop()
+            out.append(p)
+        return out
+    lo, hi = half(pts), half(reversed(pts))
+    return lo[:-1] + hi[:-1]
 
 
 def f(p):
@@ -114,7 +131,7 @@ def main():
     # Top-face highlight rim along the front edge of the case top.
     rim = poly([case(0.02, 0.0), case(0.98, 0.0), case(0.98, 0.05), case(0.02, 0.05)])
 
-    skirts, tops, legends = [], [], []
+    skirts, fronts, tops, legends = [], [], [], []
     for trow, twidths in enumerate(ROW_LAYOUT):
         # viewer row 0 (front) is the typist's far row; viewer left-to-right is typist right-to-left
         row = len(ROW_LAYOUT) - 1 - trow
@@ -123,17 +140,21 @@ def main():
         t0, t1 = row + GAP, row + 1 - GAP
         for i, w in enumerate(widths):
             s0, s1 = s + GAP, s + w - GAP
-            # keycap body: from the footprint's front edge up to the raised top's back edge, so only a
-            # thin front lip shows under each cap top
-            skirts.append(rounded([P(s0, t0), P(s1, t0), P(s1, t1, -CAP_RISE), P(s0, t1, -CAP_RISE)], 1.4))
-            ti = 0.06
-            tops.append(rounded([P(s0 + ti, t0 + CAP_FRONT, -CAP_RISE), P(s1 - ti, t0 + CAP_FRONT, -CAP_RISE),
-                                 P(s1 - ti, t1 - 0.02, -CAP_RISE), P(s0 + ti, t1 - 0.02, -CAP_RISE)], 1.4))
+            # tapered keycap: a footprint on the plate and a smaller dished top raised above it; the body
+            # is the hull of the two, and its viewer-facing sides (front + right) get a darker face
+            ti_s, ti_f, ti_b = 0.08, 0.20, 0.04
+            base = [P(s0, t0), P(s1, t0), P(s1, t1), P(s0, t1)]
+            topq = [P(s0 + ti_s, t0 + ti_f, -CAP_RISE), P(s1 - ti_s, t0 + ti_f, -CAP_RISE),
+                    P(s1 - ti_s, t1 - ti_b, -CAP_RISE), P(s0 + ti_s, t1 - ti_b, -CAP_RISE)]
+            skirts.append(rounded(hull(base + topq), 1.6))
+            fronts.append(rounded([base[0], base[1], topq[1], topq[0]], 0.8))
+            fronts.append(rounded([base[1], base[2], topq[2], topq[1]], 0.8))
+            tops.append(rounded(topq, 1.5))
             ti_ = len(widths) - 1 - i          # index in the typist's left-to-right order
             label = LEGENDS[trow][ti_]
             if label:
                 # centre of the keycap top face; the glyph's x axis runs along U, its "up" along V
-                cx, cy = P((s0 + s1) / 2, (t0 + CAP_FRONT + t1 - 0.02) / 2, -CAP_RISE)
+                cx, cy = P((s0 + s1) / 2, (t0 + ti_f + t1 - ti_b) / 2, -CAP_RISE)
                 legends.append({"row": trow, "index": ti_, "label": label,
                                 "center": [round(cx, 2), round(cy, 2)],
                                 "em": LEGEND_EM_CHAR if len(label) == 1 else LEGEND_EM_WORD,
@@ -161,6 +182,7 @@ def main():
   <path d="{top}" fill="{KB_CASE}" stroke="{GEAR_LINE}" stroke-width="{LINE_KEY}" stroke-linejoin="round"/>
   <path d="{rim}" fill="{KB_CASE_HI}"/>
   <path d="{''.join(skirts)}" fill="{KEYCAP_SIDE}" stroke="{KB_SIDE}" stroke-width="1.2" stroke-linejoin="round"/>
+  <path d="{''.join(fronts)}" fill="{KEYCAP_FRONT}"/>
   <path d="{''.join(tops)}" fill="{KEYCAP}"/>
   <path d="{silhouette}" fill="none" stroke="{GEAR_LINE}" stroke-width="{LINE_MAIN}" stroke-linejoin="round"/>
 </svg>

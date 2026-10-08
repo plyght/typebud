@@ -28,8 +28,8 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import render_art as ra  # noqa: E402
 
-# Keyboard case geometry at the default placement (scripts/gen_keyboard.py).
-FL, FR, BL = (30.0, 188.0), (170.0, 224.0), (80.0, 146.0)
+# Keyboard case geometry at the default placement, shared with scripts/gen_keyboard.py.
+from gen_keyboard import FL, FR, BL  # noqa: E402
 BR = (FR[0] + BL[0] - FL[0], FR[1] + BL[1] - FL[1])
 DEPTH = 12.0
 UNDER_TOLERANCE = 12        # outline px (at 256 px canvas scale) of arm hidden under the board next to a paw

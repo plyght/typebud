@@ -33,9 +33,10 @@ penguin, a long low capybara, an upright shiba. Don't squeeze it into another an
 
 ### Shared defaults (`_shared/`)
 
-`_shared/keyboard.svg` is drawn at a default placement (desk line y = 236; case top corners
-front-left (30,188), front-right (170,224), back-right (220,182), back-left (80,146); back edge
-y = 146 + 0.257·(x − 80); key grid K(s,t) = (37.4,185.9) + s·(8.84,2.27) + t·(8.74,−7.34)).
+`_shared/keyboard.svg` is drawn at a default placement (desk line y = 225.5; case top corners
+front-left (42.5,177.5), front-right (182.5,213.5), back-right (220,182), back-left (80,146); back
+edge y = 146 + 0.257·(x − 80), unchanged from the first version so paws still land on the back rows).
+The exact key grid is in `_shared/keyboard_keys.json` and `scripts/gen_keyboard.py`.
 `scripts/gen_keyboard.py` generates it. `_shared/reference_pose*.svg` is one example of an animal
 fitted to that default. It is **only an example**; don't copy its bean shape.
 

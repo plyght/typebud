@@ -20,7 +20,8 @@
     "fur_light_shade": "#D4AE80",
     "fur_dark": "#6B4A33",
     "fur_dark_shade": "#553A28",
-    "feature": "#E88F7A"
+    "feature": "#E88F7A",
+    "keycap_front": "#363B47"
   },
   "gear_tokens": [
     "gear_line",
@@ -35,7 +36,8 @@
     "hp_cup",
     "hp_cup_shade",
     "hp_glow",
-    "cup_sleeve"
+    "cup_sleeve",
+    "keycap_front"
   ],
   "fur_tokens": [
     "fur_main",
@@ -60,7 +62,8 @@
       "hp_cup": "#474D5A",
       "hp_cup_shade": "#2F333D",
       "hp_glow": "#9FE8FF",
-      "cup_sleeve": "#565E70"
+      "cup_sleeve": "#565E70",
+      "keycap_front": "#363B47"
     },
     "bright": {
       "gear_line": "#8A8A94",
@@ -69,13 +72,14 @@
       "kb_side": "#CFCFD6",
       "kb_side_dark": "#BDBDC6",
       "keycap": "#FFFFFF",
-      "keycap_side": "#DCDCE2",
+      "keycap_side": "#E4E4EA",
       "keycap_legend": "#6F6F7C",
       "hp_band": "#F1F1F4",
       "hp_cup": "#E6E6EA",
       "hp_cup_shade": "#C8C8D0",
       "hp_glow": "#D8F4FF",
-      "cup_sleeve": "#E9E9EC"
+      "cup_sleeve": "#E9E9EC",
+      "keycap_front": "#D0D0D8"
     },
     "pink": {
       "gear_line": "#B8738A",
@@ -84,13 +88,14 @@
       "kb_side": "#EBA6BA",
       "kb_side_dark": "#DE93A9",
       "keycap": "#FFE1E9",
-      "keycap_side": "#F4B9C9",
+      "keycap_side": "#F6C4D2",
       "keycap_legend": "#B25E7A",
       "hp_band": "#F9CAD7",
       "hp_cup": "#F6B9CA",
       "hp_cup_shade": "#E59BB1",
       "hp_glow": "#FFD3E0",
-      "cup_sleeve": "#F6B9CA"
+      "cup_sleeve": "#F6B9CA",
+      "keycap_front": "#EBA9BC"
     }
   }
 }
