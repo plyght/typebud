@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- typebud capybara z's: float up-right from the lowered head, over the back (top-left is the head). -->
+  <g fill="#FBE3A0" stroke="#3B2A1E" stroke-width="3" stroke-linejoin="round">
+  <path d="M176 34 L194 34 L194 38 L183 50 L194 50 L194 55 L176 55 L176 51 L187 39 L176 39Z"/>
+  <path d="M200 18 L212 18 L212 20.7 L204.7 28.7 L212 28.7 L212 32 L200 32 L200 29.3 L207.3 21.3 L200 21.3Z"/>
+  <path d="M218 10 L225 10 L225 11.5 L220.7 16.1 L225 16.1 L225 18 L218 18 L218 16.5 L222.3 11.9 L218 11.9Z" stroke-width="2.5"/>
+  </g>
+</svg>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- typebud capybara (Yuzu): forelegs + feet for hold, drawn after the keyboard. -->
+  <path d="M140.4 166 L142.3 156.4 L142.5 154 L142.4 152.4 L141.8 150 L140.4 147 L136.5 149.1 L130.7 151.2 L124.3 152.8 L117.1 153.8 L115.6 159.6Z" fill="#6B4A33"/>
+  <path d="M140.4 165.5 L142.5 154.8 L142.3 151.6 L141.1 148.3M116.7 155.3 L115.6 159.6 L140.4 166 L140.4 165.5" fill="none" stroke="#3B2A1E" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M161.2 137.5 L158.4 139.1 L156.1 141.4 L154.5 144.2 L153.6 147.4 L153.6 150.6 L157.2 170.3 L184.6 177.4 L183.2 168.3 L181.5 159.8 L178.1 145.8 L176.8 142.8 L175.9 141.4 L174.2 139.6 L172.2 138.2 L170 137.2 L167.6 136.6 L166 136.5 L163.6 136.7Z" fill="#6B4A33"/>
+  <path d="M161.2 137.5 L158.4 139.1 L156.1 141.4 L154.5 144.2 L153.6 147.4 L153.6 150.6 L157.2 170.3 L184.6 177.4 L183.2 168.3 L181.5 159.8 L178.1 145.8 L176.8 142.8 L175.9 141.4 L174.2 139.6 L172.2 138.2 L170 137.2 L167.6 136.6 L166 136.5 L163.6 136.7 L161.2 137.5" fill="none" stroke="#3B2A1E" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <ellipse cx="130" cy="154" rx="10.5" ry="8.5" transform="rotate(-24 130 154)" fill="#6B4A33" stroke="#3B2A1E" stroke-width="4.5"/>
+  <ellipse cx="166" cy="149" rx="10.5" ry="8.5" transform="rotate(22 166 149)" fill="#6B4A33" stroke="#3B2A1E" stroke-width="4.5"/>
+  <path d="M133 150 L136.5 149 M134 156.5 L137.5 156 M163 145 L159.5 144.5 M162.5 151.5 L159 151.5" fill="none" stroke="#3B2A1E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

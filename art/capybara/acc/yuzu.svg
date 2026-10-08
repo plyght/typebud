@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- typebud capybara: bonus: a yuzu balanced on the head (not wired in the app yet). -->
+  <g>
+  <path d="M104 30 Q103 23 107 19" fill="none" stroke="#3B2A1E" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="104" cy="32" r="12" fill="#F6C443" stroke="#3B2A1E" stroke-width="4.5"/>
+  <path d="M110 22 Q117 26 115 37 Q113 43 106 44 Q114 36 110 22Z" fill="#E3A82E"/>
+  <circle cx="104" cy="32" r="12" fill="none" stroke="#3B2A1E" stroke-width="4.5"/>
+  <circle cx="99.5" cy="28" r="2" fill="#FFF3B8"/>
+  <path d="M107 20 Q113 12 121 15 Q116 22 107 20Z" fill="#7CC27A" stroke="#3B2A1E" stroke-width="3.5" stroke-linejoin="round"/>
+  </g>
+</svg>
