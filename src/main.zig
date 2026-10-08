@@ -54,7 +54,7 @@ fn createPlatform(gpa: std.mem.Allocator, io: std.Io) !zpui.platform.Platform {
     return switch (builtin.os.tag) {
         .macos => zpui.mac_platform.create(gpa),
         .linux => zpui.linux_platform.create(gpa, .{ .io = io }),
-        .windows => if (@hasDecl(zpui, "windows_platform")) zpui.windows_platform.create(gpa, .{ .io = io }) else error.WindowsBackendMissing,
+        .windows => if (@hasDecl(zpui, "windows_platform")) zpui.windows_platform.create(gpa, .{}) else error.WindowsBackendMissing,
         else => error.Unsupported,
     };
 }
@@ -72,7 +72,8 @@ pub fn main(init: std.process.Init) !void {
     if (env.get("TYPEBUD_DEMO")) |v| if (v.len > 0 and !std.mem.eql(u8, v, "0")) {
         mode = .demo;
     };
-    var args = init.minimal.args.iterate();
+    var args = try init.minimal.args.iterateAllocator(gpa);
+    defer args.deinit();
     _ = args.skip();
     while (args.next()) |a| {
         if (std.mem.eql(u8, a, "--smoke")) mode = .smoke else if (std.mem.eql(u8, a, "--demo")) mode = .demo else if (std.mem.eql(u8, a, "--settings")) open_settings = true else if (std.mem.eql(u8, a, "--version")) {
