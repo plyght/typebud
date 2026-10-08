@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 art/*/preview/arms/
+.zig-cache/
+zig-out/
+/zpui
