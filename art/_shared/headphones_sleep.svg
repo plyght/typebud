@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- typebud shared headphones, fitted to the reference head (center 152,80; rx 58, ry 48). Sleep: follows the lowered head (translate -4,12 then rotate -6 about the head center). Gear tokens: gear_line, hp_band, hp_cup, hp_cup_shade, hp_glow; ring = fixed rainbow. -->
+  <defs>
+    <linearGradient id="hp-ring" gradientUnits="userSpaceOnUse" x1="0" y1="70" x2="0" y2="104">
+      <stop offset="0" stop-color="#4FC3F7"/>
+      <stop offset="0.25" stop-color="#7C6CFF"/>
+      <stop offset="0.45" stop-color="#E86BD8"/>
+      <stop offset="0.62" stop-color="#FF5C6C"/>
+      <stop offset="0.8" stop-color="#FFE45C"/>
+      <stop offset="1" stop-color="#5EE08A"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(-4 12) rotate(-6 152 80)">
+    <!-- far cup: only the sliver outside the head silhouette (left of head edge) -->
+    <path d="M98 63 C86 62 81 74 81 84 C81 94 86 104 99 101 C95 94 94 88 94 82 C94 75 95 69 98 63 Z" fill="#2F333D" stroke="#22252C" stroke-width="4.5" stroke-linejoin="round"/>
+    <!-- band: outlined stroke = wide gear_line stroke under a narrower hp_band stroke -->
+    <path d="M90 74 C88 14 214 8 206 70" fill="none" stroke="#22252C" stroke-width="14" stroke-linecap="round"/>
+    <path d="M90 74 C88 14 214 8 206 70" fill="none" stroke="#3B414E" stroke-width="6.5" stroke-linecap="round"/>
+    <path d="M104 40 C122 24 150 20 172 24" fill="none" stroke="#474D5A" stroke-width="2.5" stroke-linecap="round"/>
+    <!-- near cup (screen-right): cushion, then outer cap with the rainbow ring -->
+    <ellipse cx="200" cy="86" rx="11" ry="22" fill="#2F333D" stroke="#22252C" stroke-width="4.5"/>
+    <ellipse cx="210" cy="87" rx="13" ry="22" fill="#474D5A" stroke="#22252C" stroke-width="4.5"/>
+    <ellipse cx="212" cy="87" rx="6.5" ry="14" fill="#9FE8FF" stroke="url(#hp-ring)" stroke-width="3.5"/>
+    <ellipse cx="213" cy="87" rx="3" ry="8.5" fill="#474D5A"/>
+  </g>
+</svg>

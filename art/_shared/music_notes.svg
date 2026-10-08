@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- typebud shared music notes, floated above the near headphone cup while typing with headphones on.
+       Stems/flags are outlined strokes (wide outline under a narrow cream stroke); heads are cream with outline. -->
+  <g transform="translate(-4 0)">
+  <path d="M216 28 L216 50 M216 28 Q224 30 227 38 M232 46 L232 64 M232 46 L240 44 L240 60" fill="none" stroke="#3B2A1E" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M216 28 L216 50 M216 28 Q224 30 227 38 M232 46 L232 64 M232 46 L240 44 L240 60" fill="none" stroke="#FBE3A0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="#FBE3A0" stroke="#3B2A1E" stroke-width="3.2">
+    <ellipse cx="211.5" cy="51" rx="6" ry="4.6" transform="rotate(-20 211.5 51)"/>
+    <ellipse cx="228" cy="65" rx="4.8" ry="3.8" transform="rotate(-20 228 65)"/>
+    <ellipse cx="236" cy="61" rx="4.8" ry="3.8" transform="rotate(-20 236 61)"/>
+  </g>
+  </g>
+</svg>

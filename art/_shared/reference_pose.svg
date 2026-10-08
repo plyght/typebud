@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- REFERENCE ONLY (not shipped): placeholder animal, typing pose, body + head layer.
+       Pair: reference_pose_paws.svg (drawn after the keyboard). Magenta = guides. Numbers: art/SPEC.md. -->
+  <!-- body bean: shoulders under the head, bottom hidden behind the keyboard -->
+  <path d="M108 112 C92 136 90 178 100 200 L206 206 C216 180 218 138 198 110 Z" fill="#B07A4A" stroke="#3B2A1E" stroke-width="5" stroke-linejoin="round"/>
+  <!-- the one shade tone: right flank (light comes from the upper left) -->
+  <path d="M196 124 C208 146 210 176 204 202 L188 202 C196 176 196 150 186 130 Z" fill="#8A5A33"/>
+  <!-- head -->
+  <ellipse cx="152" cy="80" rx="58" ry="48" fill="#B07A4A" stroke="#3B2A1E" stroke-width="5"/>
+  <!-- face: content eyes, blush, mouth. Face center x=144 (8 left of head center = 3/4 view facing left) -->
+  <path d="M115 84 L130 84 M158 82 L173 82" stroke="#3B2A1E" stroke-width="4.5" stroke-linecap="round"/>
+  <ellipse cx="110" cy="99" rx="8" ry="4.5" fill="#F4A6A0"/>
+  <ellipse cx="177" cy="97" rx="8" ry="4.5" fill="#F4A6A0"/>
+  <path d="M140 99 Q144 103 148 99" fill="none" stroke="#3B2A1E" stroke-width="3.5" stroke-linecap="round"/>
+  <!-- guides -->
+  <g fill="none" stroke="#E0457B" stroke-width="1.2" stroke-dasharray="3 3">
+    <path d="M16 236 L240 236"/>
+    <path d="M80 146 L220 182"/>
+    <ellipse cx="152" cy="80" rx="54" ry="44"/>
+    <ellipse cx="152" cy="80" rx="62" ry="52"/>
+    <path d="M16 24 L240 24 L240 240 L16 240 Z"/>
+  </g>
+  <g fill="none" stroke="#E0457B" stroke-width="1.6">
+    <path d="M146 80 L158 80 M152 74 L152 86"/>
+    <circle cx="122" cy="136" r="2"/>
+    <circle cx="182" cy="144" r="2"/>
+  </g>
+</svg>

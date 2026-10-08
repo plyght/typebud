@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- typebud shared sparkles: 4-point stars, cream fill, outline. Decorative, drawn behind the animal. -->
+  <path d="M26 206 Q27.5 216.5 36 218 Q27.5 219.5 26 230 Q24.5 219.5 16 218 Q24.5 216.5 26 206 Z" fill="#FBE3A0" stroke="#3B2A1E" stroke-width="3.5" stroke-linejoin="round"/>
+  <path d="M233 88 Q234 96 239 97 Q234 98 233 106 Q232 98 227 97 Q232 96 233 88 Z" fill="#FBE3A0" stroke="#3B2A1E" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M72 26 Q72.8 31.5 77 32 Q72.8 32.5 72 38 Q71.2 32.5 67 32 Q71.2 31.5 72 26 Z" fill="#FBE3A0" stroke="#3B2A1E" stroke-width="2.8" stroke-linejoin="round"/>
+</svg>

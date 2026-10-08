@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- typebud shared motion marks for excited: short dashes radiating from the two paw rest points
+       (L 122,168 / R 160,180). Outlined strokes so they read on fur, desk and any keyboard theme. -->
+  <path d="M101 155 L95 151 M106 146 L102 140 M99 167 L92 167 M181 185 L188 187 M178 196 L183 201 M175 168 L180 163" fill="none" stroke="#3B2A1E" stroke-width="7" stroke-linecap="round"/>
+  <path d="M101 155 L95 151 M106 146 L102 140 M99 167 L92 167 M181 185 L188 187 M178 196 L183 201 M175 168 L180 163" fill="none" stroke="#FBE3A0" stroke-width="2.6" stroke-linecap="round"/>
+</svg>

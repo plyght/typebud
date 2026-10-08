@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- REFERENCE ONLY: hug paws for hold.svg, drawn AFTER the hold item. Both forearms come in from the
+       shoulders and the paws wrap the item's lower front: L paw (148,152), R paw (182,146). -->
+  <path d="M110 134 C110 148 120 156 136 158 L146 144 C134 144 128 140 132 132 Z" fill="#B07A4A"/>
+  <path d="M110 134 C110 148 120 156 136 158 M146 144 C134 144 128 140 132 132" fill="none" stroke="#3B2A1E" stroke-width="5" stroke-linecap="round"/>
+  <path d="M200 132 C202 146 196 154 186 156 L178 142 C186 140 190 136 188 128 Z" fill="#B07A4A"/>
+  <path d="M200 132 C202 146 196 154 186 156 M178 142 C186 140 190 136 188 128" fill="none" stroke="#3B2A1E" stroke-width="5" stroke-linecap="round"/>
+  <ellipse cx="148" cy="152" rx="11" ry="9" transform="rotate(-20 148 152)" fill="#B07A4A" stroke="#3B2A1E" stroke-width="4.5"/>
+  <ellipse cx="182" cy="146" rx="10" ry="9" transform="rotate(20 182 146)" fill="#B07A4A" stroke="#3B2A1E" stroke-width="4.5"/>
+  <path d="M152 148 L155 147 M153 154 L156 153.5 M178 142 L175 141.5 M178 148 L175 148" stroke="#3B2A1E" stroke-width="2.5" stroke-linecap="round"/>
+  <g fill="none" stroke="#E0457B" stroke-width="1.6"><circle cx="148" cy="152" r="2"/><circle cx="182" cy="146" r="2"/><path d="M158 140 L170 140 M164 134 L164 146"/></g>
+</svg>

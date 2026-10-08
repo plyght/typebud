@@ -1,15 +1,23 @@
 #!/usr/bin/env python3
-"""Render an animal's layered SVG art to PNG previews, the way the app stacks it (art/SPEC.md).
+"""Render typebud's layered SVG art to PNG previews, stacked the way the app stacks it (art/SPEC.md).
 
-usage: scripts/render_art.py [<animal> ...]     (default: every folder in art/)
+usage: scripts/render_art.py [<animal> ...]   every folder in art/ except _shared when none given
+       scripts/render_art.py --shared         the shared layers + reference pose, all three themes
+
+Colors: gear tokens (keyboard, headphones, cup sleeve) come from art/_shared/themes.json per theme;
+fur tokens come from art/<animal>/palette.json and are the same in every theme.
+Layers: an animal's acc/<name>.svg wins; otherwise art/_shared/<name>.svg is used.
+
 Writes art/<animal>/preview/:
-  sheet.png        every frame composited with keyboard + paws, one row per theme
-  accessories.png  idle (or hold/sip) with each accessory turned on, bright theme
+  sheet.png        every frame with keyboard + paws, one row per theme (+ idle at 96/512 px)
+  accessories.png  frames with each accessory turned on, bright theme
   icon*_16x.png    the tray icons at 16 px, upscaled for inspection
+and for --shared, art/_shared/preview/sheet.png.
 Needs: pip install cairosvg pillow
 """
 import io
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -17,61 +25,108 @@ import cairosvg
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parent.parent / "art"
-FRAMES = ["idle", "blink", "type_left", "type_right", "type_both", "excited", "sleep", "wake", "hold", "sip"]
+SHARED = ROOT / "_shared"
+THEME_FILE = json.loads((SHARED / "themes.json").read_text())
+PLACEHOLDERS = {k: v.upper() for k, v in THEME_FILE["placeholders"].items()}
+THEMES = list(THEME_FILE["themes"])                      # dark, bright, pink
+
+FRAMES = ["idle", "peek", "type_left", "type_right", "type_both", "excited", "sleep", "wake", "hold", "sip"]
+PAWS_FALLBACK = {"peek": "idle", "wake": "sleep"}         # these frames may reuse another frame's paws
+TYPING = {"type_left", "type_right", "type_both", "excited"}
+SLEEPY = {"sleep", "wake"}
 ICONS = ["icon", "icon_template"]
 HEAD = ["headphones", "beanie", "party_hat", "bow", "glasses"]
 HOLD = ["hold_coffee", "hold_boba", "hold_book"]
-DESK = ["desk_plant", "desk_lamp", "desk_mug"]
-TOKENS = {
-    "fur_main": "#B07A4A", "fur_shade": "#8A5A33", "fur_light": "#E8C9A0", "outline": "#3B2A1E",
-    "blush": "#F2A7A0", "keyboard": "#2E3440", "keycap": "#D8DEE9", "accent": "#FFD166",
-    "item_a": "#C0392B", "item_b": "#27AE60", "item_c": "#F5F5F5",
-}
+DESK = ["desk_lamp", "desk_plant", "desk_mug"]
 BACKDROPS = {"dark": (30, 30, 36), "bright": (245, 245, 240), "pink": (255, 228, 236)}
 SIZE = 256
+HEX = re.compile(r"#[0-9A-Fa-f]{6}\b")
 
 
-class Animal:
-    def __init__(self, name: str):
-        self.dir = ROOT / name
-        pal = self.dir / "palette.json"
-        self.palette = json.loads(pal.read_text()) if pal.exists() else {}
+def color_map(theme: str, fur: dict) -> dict:
+    """placeholder hex -> real hex for one theme: gear from themes.json, fur from the animal palette."""
+    real = dict(THEME_FILE["themes"][theme])
+    real.update({k: v for k, v in fur.items() if k in THEME_FILE["fur_tokens"]})
+    return {PLACEHOLDERS[t]: c for t, c in real.items() if t in PLACEHOLDERS}
 
-    def layer(self, rel: str, theme: str):
-        path = self.dir / f"{rel}.svg"
-        if not path.exists():
-            return None
-        svg = path.read_text()
-        for token, placeholder in TOKENS.items():
-            color = self.palette.get(theme, {}).get(token)
-            if color:
-                svg = svg.replace(placeholder, color).replace(placeholder.lower(), color)
-        png = cairosvg.svg2png(bytestring=svg.encode(), output_width=SIZE, output_height=SIZE)
-        return Image.open(io.BytesIO(png)).convert("RGBA")
 
-    def stack(self, frame: str, theme: str, desk=(), head=None, hold=None, keyboard=True):
-        sleeping = frame in ("sleep", "wake")
-        names = [f"acc/{d}" for d in desk] + [frame]
-        if head:
-            names.append(f"acc/{head}_sleep" if sleeping else f"acc/{head}")
-        if keyboard:
-            names.append("acc/keyboard")
-        names.append(f"{frame}_paws")
-        if hold and frame in ("hold", "sip"):
-            names.append(f"acc/{hold}")
-        out = Image.new("RGBA", (SIZE, SIZE), BACKDROPS[theme] + (255,))
-        missing = []
-        for n in names:
-            img = self.layer(n, theme)
-            if img is None:
-                missing.append(n)
-            else:
-                out.alpha_composite(img)
-        return out.convert("RGB"), missing
+def recolor(svg: str, cmap: dict) -> str:
+    # one pass, so a replacement can never be re-replaced by a later token
+    return HEX.sub(lambda m: cmap.get(m.group(0).upper(), m.group(0)), svg)
+
+
+def raster(path: Path, cmap: dict, size: int) -> Image.Image:
+    svg = recolor(path.read_text(), cmap)
+    png = cairosvg.svg2png(bytestring=svg.encode(), output_width=size, output_height=size)
+    return Image.open(io.BytesIO(png)).convert("RGBA")
+
+
+def compose(paths, theme: str, fur: dict, size: int = SIZE) -> Image.Image:
+    cmap = color_map(theme, fur)
+    out = Image.new("RGBA", (size, size), BACKDROPS[theme] + (255,))
+    for p in paths:
+        out.alpha_composite(raster(p, cmap, size))
+    return out.convert("RGB")
 
 
 def label(draw, x, y, text):
     draw.text((x + 6, y + 4), text, fill=(0, 0, 0))
+
+
+class Animal:
+    def __init__(self, name: str):
+        self.name = name
+        self.dir = ROOT / name
+        pal = self.dir / "palette.json"
+        data = json.loads(pal.read_text()) if pal.exists() else {}
+        if any(t in data for t in THEMES):
+            print(f"  {name}: palette.json is per-theme (old format); fur is no longer themed, using 'bright'")
+            data = data.get("bright", {})
+        self.fur = data
+
+    def find(self, rel: str):
+        """Path for a layer: the animal's own file, else (for acc/ layers) the shared one."""
+        own = self.dir / f"{rel}.svg"
+        if own.exists():
+            return own
+        if rel.startswith("acc/"):
+            shared = SHARED / f"{rel[4:]}.svg"
+            if shared.exists():
+                return shared
+        if rel.endswith("_paws"):
+            base = rel[: -len("_paws")]
+            if base in PAWS_FALLBACK:
+                return self.find(PAWS_FALLBACK[base] + "_paws")
+        return None
+
+    def layers(self, frame, desk=(), head=None, hold=None, keyboard=True, sparkles=False):
+        """Layer names in draw order (SPEC "Draw order")."""
+        names = []
+        if sparkles:
+            names.append("acc/sparkles")
+        names += [f"acc/{d}" for d in DESK if d in desk]
+        names.append(frame)
+        if head:
+            names.append(f"acc/{head}_sleep" if frame in SLEEPY else f"acc/{head}")
+        if keyboard:
+            names.append("acc/keyboard")
+        if hold and frame in ("hold", "sip"):
+            names.append(f"acc/{hold}")
+        names.append(f"{frame}_paws")
+        if head == "headphones" and frame in TYPING:
+            names.append("acc/music_notes")
+        if frame == "excited":
+            names.append("acc/motion")
+        if frame == "sleep":
+            names.append("acc/zzz")
+        return names
+
+    def stack(self, frame, theme, size=SIZE, **kw):
+        paths, missing = [], []
+        for n in self.layers(frame, **kw):
+            p = self.find(n)
+            (paths.append(p) if p else missing.append(n))
+        return compose(paths, theme, self.fur, size), missing
 
 
 def render(name: str) -> None:
@@ -80,24 +135,27 @@ def render(name: str) -> None:
     out.mkdir(exist_ok=True)
     missing = set()
 
-    sheet = Image.new("RGB", (SIZE * len(FRAMES), SIZE * len(BACKDROPS) + 20), (255, 255, 255))
+    sheet = Image.new("RGB", (SIZE * len(FRAMES), SIZE * len(THEMES) + 20), (255, 255, 255))
     for col, frame in enumerate(FRAMES):
-        for row, theme in enumerate(BACKDROPS):
+        for row, theme in enumerate(THEMES):
             hold = "hold_coffee" if frame in ("hold", "sip") else None
-            img, miss = a.stack(frame, theme, hold=hold)
+            img, miss = a.stack(frame, theme, hold=hold, head="headphones")
             missing.update(miss)
             sheet.paste(img, (col * SIZE, row * SIZE))
-            if row == 0:
+            if theme == "bright":
                 img.save(out / f"{frame}.png")
-        label(ImageDraw.Draw(sheet), col * SIZE, SIZE * len(BACKDROPS), frame)
+        label(ImageDraw.Draw(sheet), col * SIZE, SIZE * len(THEMES), frame)
     sheet.save(out / "sheet.png")
+    for px in (96, 512):
+        img, _ = a.stack("idle", "bright", size=px, head="headphones", sparkles=True)
+        img.save(out / f"idle_{px}.png")
 
-    combos = [("no keyboard", dict(frame="idle", keyboard=False))]
+    combos = [("no keyboard", dict(frame="idle", keyboard=False)), ("bare", dict(frame="type_left"))]
     combos += [(h, dict(frame="type_left", head=h)) for h in HEAD]
     combos += [(h + " (sleep)", dict(frame="sleep", head=h)) for h in ("headphones", "beanie")]
     combos += [(h, dict(frame="hold", hold=h)) for h in HOLD]
     combos += [("sip", dict(frame="sip", hold="hold_coffee"))]
-    combos += [("desk", dict(frame="type_both", desk=DESK))]
+    combos += [("desk+sparkles", dict(frame="type_both", desk=DESK, sparkles=True))]
     acc = Image.new("RGB", (SIZE * len(combos), SIZE + 20), (255, 255, 255))
     for col, (title, kw) in enumerate(combos):
         img, miss = a.stack(theme="bright", **kw)
@@ -111,14 +169,59 @@ def render(name: str) -> None:
         if not path.exists():
             missing.add(icon)
             continue
-        small = cairosvg.svg2png(bytestring=path.read_bytes(), output_width=16, output_height=16)
-        Image.open(io.BytesIO(small)).resize((128, 128), Image.NEAREST).save(out / f"{icon}_16x.png")
+        small = raster(path, color_map("bright", a.fur), 16)
+        small.resize((128, 128), Image.NEAREST).save(out / f"{icon}_16x.png")
 
-    print(f"{name}: wrote {out}/sheet.png, accessories.png")
+    print(f"{name}: wrote {out}/sheet.png, accessories.png, idle_96.png, idle_512.png")
     for m in sorted(missing):
         print(f"  missing {m}.svg")
 
 
+def render_shared() -> None:
+    """Shared layers on the reference placeholder animal, in all three themes."""
+    s = lambda n: SHARED / f"{n}.svg"
+    ref, ref_paws, hug = s("reference_pose"), s("reference_pose_paws"), s("reference_hold_paws")
+    kb = s("keyboard")
+    scene = [s("sparkles")] + [s(d) for d in DESK] + [ref, s("headphones"), kb, ref_paws, s("music_notes")]
+    cols = [
+        ("scene", scene),
+        ("keyboard", [kb]),
+        ("reference pose", [ref, kb, ref_paws]),
+        ("hold_coffee", [ref, s("headphones"), kb, s("hold_coffee"), hug]),
+        ("hold_boba", [ref, kb, s("hold_boba"), hug]),
+        ("hold_book", [ref, kb, s("hold_book"), hug]),
+        ("excited marks", [ref, kb, ref_paws, s("motion")]),
+        ("sleep gear + zzz", [s("headphones_sleep"), kb, s("zzz")]),
+        ("desk props", [s(d) for d in DESK] + [s("sparkles")]),
+    ]
+    fur = {}
+    out = SHARED / "preview"
+    out.mkdir(exist_ok=True)
+    small = 96
+    h = SIZE * len(THEMES) + small + 20
+    sheet = Image.new("RGB", (SIZE * len(cols), h), (255, 255, 255))
+    draw = ImageDraw.Draw(sheet)
+    for col, (title, paths) in enumerate(cols):
+        for row, theme in enumerate(THEMES):
+            sheet.paste(compose(paths, theme, fur), (col * SIZE, row * SIZE))
+        label(draw, col * SIZE, SIZE * len(THEMES) + small, title)
+    # bottom strip: the scene and the keyboard at the smallest on-screen size, every theme
+    x = 0
+    for paths in (scene, [ref, s("headphones"), kb, ref_paws]):
+        for theme in THEMES:
+            sheet.paste(compose(paths, theme, fur, small), (x, SIZE * len(THEMES)))
+            x += small + 8
+    label(draw, x, SIZE * len(THEMES) + 30, "<- 96 px: scene x3 themes, typing pose x3 themes")
+    sheet.save(out / "sheet.png")
+    for px in (96, 512):
+        compose(scene, "dark", fur, px).save(out / f"scene_dark_{px}.png")
+    print(f"_shared: wrote {out}/sheet.png, scene_dark_96.png, scene_dark_512.png")
+
+
 if __name__ == "__main__":
-    for n in sys.argv[1:] or sorted(p.name for p in ROOT.iterdir() if p.is_dir()):
-        render(n)
+    args = sys.argv[1:]
+    if args == ["--shared"]:
+        render_shared()
+    else:
+        for n in args or sorted(p.name for p in ROOT.iterdir() if p.is_dir() and not p.name.startswith("_")):
+            render(n)

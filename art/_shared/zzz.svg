@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- typebud shared sleep z's, floating up-left from the lowered face. Cream fill + outline like sparkles. -->
+  <g transform="translate(-8 0)" fill="#FBE3A0" stroke="#3B2A1E" stroke-width="3" stroke-linejoin="round">
+    <path d="M78 48 L96 48 L96 52 L85 64 L96 64 L96 69 L78 69 L78 65 L89 53 L78 53 Z"/>
+    <path d="M58 32 L70 32 L70 35 L63 43 L70 43 L70 46 L58 46 L58 43 L65 35 L58 35 Z"/>
+    <path d="M44 24 L51 24 L51 26 L47.5 30 L51 30 L51 32 L44 32 L44 30 L47.5 26 L44 26 Z" stroke-width="2.5"/>
+  </g>
+</svg>
