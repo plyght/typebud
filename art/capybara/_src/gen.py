@@ -320,7 +320,7 @@ def hold_paws():
 
 def sip_paws():
     return svg(arms(SIP_L, -30, "hug", SIP_R, 10, "hug", el=(116, 150), er=(192, 146), r=(13, 11), bows=(-4, 4)),
-               "sip forearms + paws: lifting the item to the mouth (drawn after acc/hold_*_sip).")
+               "sip forearms + paws: lifting the item to the mouth (drawn after acc/sip_*).")
 
 
 # ---- accessories --------------------------------------------------------------------------------
@@ -550,7 +550,7 @@ def main():
         files[f"acc/{name}_sleep"] = svg(defs + G(body_, SLEEP_T), note + " (sleep: follows the lowered head).")
     for it in ("hold_coffee", "hold_boba", "hold_book"):
         files[f"acc/{it}"] = item(it, HOLD_T[it], shared)
-        files[f"acc/{it}_sip"] = item(it, SIP_T[it], shared).replace("hug position", "SIP position", 1)
+        files[f"acc/sip_{it.removeprefix('hold_')}"] = item(it, SIP_T[it], shared).replace("hug position", "SIP position", 1)
     for rel, text in files.items():
         p = OUT / f"{rel}.svg"
         p.write_text(text)
