@@ -20,14 +20,19 @@ rx 60, ry 47.
 - `sleep`: head lowered by the sleep transform, "u" sleepy eyes (distinct from the content line
   eyes), tail tucked low behind the keyboard.
 - `wake`: head still lowered, left eye open, right eye sleepy. Uses `sleep_paws`.
-- `hold`: content face, chubby forearms hugging the item at the shared hug anchor (the shared
-  `hold_*` positions fit, so there are no `acc/hold_*` overrides).
+- `hold`: content face, chubby forearms hugging the item. The paws and the item sit 5 units above
+  the shared hug anchor (`acc/hold_coffee.svg`, `acc/hold_boba.svg`, `acc/hold_book.svg` are the shared
+  drawings at `translate(164 135)`), so neither the paws nor the item's base overlap the keyboard's
+  back rim.
 - `sip`: happy closed eyes, paws raised to (134,132)/(168,124) holding the item at the mouth.
   The item positions for this frame are `acc/sip_coffee.svg`, `acc/sip_boba.svg`, `acc/sip_book.svg`
   (shared drawings, group transform `translate(147 116) rotate(-24)`).
 - `icon` / `icon_template`: front-facing face, outline 16, eyes 18; reads at 16 px.
 
 Accessories (`acc/`, each with a `_sleep` twin in the sleep transform): `headphones` refit to the
-head, with the band running behind both ears (gaps cut along the ear outlines); `beanie` (teal knit,
-the ears poke through two holes); `party_hat` (on the forehead between the ears); `bow` (pink, at the
+head: one band over the crown that runs behind both ears (cut exactly along the ears' outer outline,
+no end caps), drops behind the head on the far side (clipped at the head outline) into a far cup that
+only shows as a crescent, and comes down the near side into the near cup; `beanie` (teal knit,
+the ears poke through two holes; inside the holes the ear bases are repainted so the head outline and
+forehead stripe don't show through); `party_hat` (on the forehead between the ears); `bow` (pink, at the
 base of the near ear); `glasses` (round brown frames over the eyes).

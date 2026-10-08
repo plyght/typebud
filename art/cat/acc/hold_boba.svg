@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- typebud shared held boba tea, cat hug position (nudged up off the keyboard rim). Drawn around (0,0); move/tilt with the group transform.
+       Hug anchor = translate(164 140), tilt 10deg. -->
+  <g transform="translate(164 135) rotate(10)">
+    <!-- straw (behind the dome) -->
+    <path d="M3 -18 L9 -38" stroke="#3B2A1E" stroke-width="8.5" stroke-linecap="round"/>
+    <path d="M3 -18 L9 -38" stroke="#F497B4" stroke-width="3.5" stroke-linecap="round"/>
+    <!-- cup -->
+    <path d="M-13 -13 L13 -13 L10 22 Q0 25 -10 22 Z" fill="#EBCB9F" stroke="#3B2A1E" stroke-width="4.5" stroke-linejoin="round"/>
+    <path d="M6 -13 L13 -13 L10 22 Q7 23 4 23 Z" fill="#D9B283"/>
+    <!-- pearls -->
+    <path d="M-7 15 m-3 0 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0 M0 17 m-3 0 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0 M6 14 m-3 0 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0 M-3 10 m-3 0 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0 M4 8 m-3 0 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0" fill="#5A3E2E"/>
+    <!-- dome lid -->
+    <path d="M-15 -13 Q-14 -27 0 -27 Q14 -27 15 -13 Z" fill="#FFFFFF" fill-opacity="0.85" stroke="#3B2A1E" stroke-width="4.5" stroke-linejoin="round"/>
+    <path d="M-16 -13 L16 -13" stroke="#3B2A1E" stroke-width="4.5" stroke-linecap="round"/>
+    <path d="M-8 -6 L-9 4" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+</svg>

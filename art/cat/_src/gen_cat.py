@@ -189,12 +189,22 @@ def ear_pts(side, perk=False):
 def ear(side, perk=False):
     pts = ear_pts(side, perk)
     d, poly = rounded(pts, [2, 6.5, 2])
-    # inner ear: shrink toward a point near the base middle
-    cx = (pts[0][0] + pts[2][0]) / 2 * 0.62 + pts[1][0] * 0.38
-    cy = (pts[0][1] + pts[2][1]) / 2 * 0.62 + pts[1][1] * 0.38 + 4
-    inner_pts = [(cx + (x - cx) * 0.56, cy + (y - cy) * 0.56) for x, y in pts]
-    di, ipoly = rounded(inner_pts, [1.5, 4, 1.5])
+    di, _ = ear_inner_shape(side, perk)
     return d, poly, di
+
+
+def ear_inner_shape(side, perk=False):
+    """Inner ear: the ear shrunk toward a point near the base middle. The point comes from the
+    resting ear in both poses, so a perked ear's inner ear only stretches toward the tip and keeps
+    the same base (the beanie repaints ear bases and must match either pose)."""
+    pts, rest = ear_pts(side, perk), ear_pts(side, False)
+    cx = (rest[0][0] + rest[2][0]) / 2 * 0.62 + rest[1][0] * 0.38
+    cy = (rest[0][1] + rest[2][1]) / 2 * 0.62 + rest[1][1] * 0.38 + 4
+    return rounded([(cx + (x - cx) * 0.56, cy + (y - cy) * 0.56) for x, y in pts], [1.5, 4, 1.5])
+
+
+def ear_inner(side, perk=False):
+    return ear_inner_shape(side, perk)[1]
 
 
 EARS_ALL = unary_union([ear(s, p)[1] for s in "LR" for p in (False, True)])
@@ -289,11 +299,11 @@ def face(eyes, mouth):
 # ---------------------------------------------------------------- body + tail
 # the two ends run a few units on into the head (same tangent) so the stroke's closing corner stays
 # hidden under the head instead of nicking the chin outline
-BODY_D = "M113 105 L108 112 C91 136 89 178 99 203 Q153 216 207 207 C217 180 219 137 198 110 L192 102Z"
+BODY_D = "M113 105 L108 112 C91 136 89 178 99 203 Q153 215 204 204 C215 178 219 137 198 110 L192 102Z"
 BODY = Polygon([(113, 105)] + cubic((108, 112), (91, 136), (89, 178), (99, 203))
-               + cubic((207, 207), (217, 180), (219, 137), (198, 110)) + [(192, 102)])
+               + cubic((204, 204), (215, 178), (219, 137), (198, 110)) + [(192, 102)])
 BIB_D = "M124 114 C121 138 128 160 146 168 C164 170 178 152 180 116Z"
-BODY_SHADE_D = "M199 119 C210 142 211 176 205 205 L186 205 C195 178 196 152 190 133 Q191 124 199 119Z"
+BODY_SHADE_D = "M199 119 C210 142 210 174 203 204 L186 205 C195 178 196 152 190 133 Q191 124 199 119Z"
 BODY_STRIPES = unary_union([
     tapered((222, 132), (199, 129), 4.2, 1.0),
     tapered((222, 150), (201, 148), 4.0, 1.0),
@@ -501,7 +511,7 @@ def paws_layer(lstate, rstate, sleeping=False):
 
 def hug_paws(kind):
     if kind == "hug":
-        pl, pr = (148, 152), (182, 146)
+        pl, pr = (148, 147), (182, 145)
         rl, rr = -20, 20
         clip = HEAD
     else:
@@ -525,6 +535,7 @@ def hug_paws(kind):
 
 
 SIP_ANCHOR = (147, 116, -24)
+HOLD_DY = -5.0  # hug-position held items sit this far above the shared anchor
 SIP_PAWS = ((134, 132), (168, 124))
 
 
@@ -585,17 +596,31 @@ HP_RING = """<defs>
 
 
 def headphones_body():
-    band = LineString(cubic((89, 78), (86, 22), (217, 16), (209, 72), 80))
-    cut = EARS_ALL.buffer(2.6)
-    outer = band.buffer(7, cap_style="round").difference(cut)
-    inner = band.buffer(3.25, cap_style="round").difference(cut.buffer(3.4))
-    hl = LineString(cubic((104, 45), (120, 30), (150, 26), (176, 30), 40)).buffer(1.25).difference(cut.buffer(3.0))
-    hl = hl.intersection(inner)
+    """One continuous band over the crown that passes behind both ears (cut exactly along the ears'
+    outer outline edge, no end caps, so it reads as one piece running behind them), drops down the
+    far side behind the head (clipped at the head outline) into a far cup that only shows as a
+    crescent beyond the head, and comes down the near side into the near cup."""
+    band = LineString(cubic((89, 78), (86, 22), (217, 16), (209, 72), 160))
+    # behind the ears: the normal ears' full outline, plus the perked ears (excited) almost to their
+    # outline's middle, so neither pose leaves a gap or lets the band cover much of an ear outline
+    ears = unary_union([ear(sd, False)[1].buffer(2.5) for sd in "LR"]
+                       + [ear(sd, True)[1].buffer(0.5) for sd in "LR"])
+    head_out = ellipse_poly(HX, HY, HRX, HRY, res=160).buffer(2.5, quad_segs=32)
+    # left of the far ear the band is on the far side of the head: the head hides it
+    far = Polygon([(0, 0), (104, 0), (104, 256), (0, 256)]).intersection(head_out)
+    cut = unary_union([ears, far])
+    outer = band.buffer(7, quad_segs=32).difference(cut)
+    inner = band.buffer(3.25, quad_segs=32).difference(cut)
+    hl = LineString(cubic((104, 45), (120, 30), (150, 26), (176, 30), 40)).buffer(1.25)
+    hl = hl.intersection(inner.buffer(-1.2)).difference(cut.buffer(1.5))
+    # far cup: an ellipse tucked behind the head's left side; only the crescent beyond the head's
+    # outline shows, and its fill meets that outline directly
+    far_cup = ellipse_poly(91, 85, 12, 21.5, res=96)
+    fc_outer = far_cup.buffer(2.25).difference(head_out)
+    fc_inner = far_cup.buffer(-2.25).difference(head_out)
     out = [
-        # far cup crescent outside the head's left edge
-        f'<path d="M95 65 C83 64 78 76 78 86 C78 96 83 106 96 103 C92 96 91 90 91 84 C91 77 92 71 95 65Z" '
-        f'fill="{HP_SH}" stroke="{G_LINE}" stroke-width="4.5" stroke-linejoin="round"/>',
-        fill(poly_d(outer), G_LINE), fill(poly_d(inner), HP_BAND), fill(poly_d(hl), HP_CUP),
+        fill(poly_d(outer, 0.03), G_LINE), fill(poly_d(inner, 0.03), HP_BAND), fill(poly_d(hl, 0.03), HP_CUP),
+        fill(poly_d(fc_outer, 0.03), G_LINE), fill(poly_d(fc_inner, 0.03), HP_SH),
         f'<ellipse cx="202" cy="88" rx="11" ry="22" fill="{HP_SH}" stroke="{G_LINE}" stroke-width="4.5"/>',
         f'<ellipse cx="212" cy="89" rx="13" ry="22" fill="{HP_CUP}" stroke="{G_LINE}" stroke-width="4.5"/>',
         f'<ellipse cx="214" cy="89" rx="6.5" ry="14" fill="{HP_GLOW}" stroke="url(#hp-ring)" stroke-width="3.5"/>',
@@ -616,8 +641,12 @@ def beanie_body():
     cuff_lo = cubic((86, 74), (120, 59), (184, 57), (218, 74), 40)
     cuff_hi = [(x, y - 11) for x, y in cubic((86, 74), (120, 59), (184, 57), (218, 74), 40)]
     cuff = Polygon(cuff_lo + cuff_hi[::-1]).buffer(1.5).intersection(top.buffer(0.5))
-    hat = unary_union([dome, cuff]).difference(EARS_ALL.buffer(1.0))
-    cuff = cuff.difference(EARS_ALL.buffer(1.0))
+    # ear holes hug the normal ears (the hat's 4.5 hole outline lands on the ear outline); the perked
+    # ears only stick out of them by a hair. A hole cut to both poses leaves forehead (and a stripe)
+    # showing between the hat and the idle ears.
+    holes = unary_union([ear(sd, False)[1].buffer(1.0) for sd in "LR"] + [ear(sd, True)[1] for sd in "LR"])
+    hat = unary_union([dome, cuff]).difference(holes)
+    cuff = cuff.difference(holes)
     shade = hat.difference(affinity.translate(hat, -7, -3))
     ribs = []
     for k in range(13):
@@ -629,7 +658,18 @@ def beanie_body():
     knit = MultiLineString([LineString(cubic((112, 52), (122, 46), (130, 42), (140, 40), 10)),
                             LineString(cubic((160, 40), (170, 41), (180, 45), (190, 51), 10))]).difference(EARS_ALL.buffer(4))
     hd = poly_d(hat)
+    # inside the holes the frame shows the head drawn over the ear bases (head outline + a forehead
+    # stripe running across the ear). Under a hat the ear comes straight out of the knit, so repaint
+    # the part of each hole below the head outline as ear: fur + inner ear, no head line.
+    head_out = HEAD.buffer(3.5)  # a unit past the head outline, so no anti-aliased seam shows it
+    ear_fill, inner = [], []
+    for sd in "LR":
+        hole = ear(sd, False)[1].buffer(1.0).union(ear(sd, True)[1])
+        low = hole.intersection(head_out).intersection(top.buffer(3))
+        ear_fill.append(low)
+        inner.append(ear_inner(sd, False).intersection(low))
     return [
+        fill(poly_d(unary_union(ear_fill)), MAIN), fill(poly_d(unary_union(inner)), FEAT),
         fill(hd, BEANIE_C, ' fill-rule="evenodd"'), fill(poly_d(shade), BEANIE_SH),
         stroke(line_d(ribs), 2.2, BEANIE_RIB), stroke(line_d(knit), 2.2, BEANIE_RIB),
         stroke(poly_d(cuff), 3.5), stroke(hd, 4.5),
@@ -679,7 +719,7 @@ def glasses_body():
 
 def build_acc():
     items = {
-        "headphones": (headphones_body, HP_RING, "headphones refit to the cat head (H 152,82; rx 60, ry 47); band gaps behind both ears."),
+        "headphones": (headphones_body, HP_RING, "headphones refit to the cat head (H 152,82; rx 60, ry 47): one band behind both ears, far side behind the head."),
         "beanie": (beanie_body, "", "knit beanie on the crown, ears poke through two holes."),
         "party_hat": (party_hat_body, "", "party hat on the forehead between the ears."),
         "bow": (bow_body, "", "ribbon bow at the base of the near ear."),
@@ -704,6 +744,13 @@ def build_hold():
                      f'<g transform="translate({sx} {sy}) rotate({sr})">', src, count=1)
         sip = sip.replace("hug position", "cat sip position (raised to the mouth)")
         (ACC / f"sip_{item[5:]}.svg").write_text(sip)
+        # hug position: the shared anchor nudged up so the item's base clears the keyboard's back rim
+        # (it is drawn over the keyboard; lower, its bottom would read as poking through the board)
+        hug = re.sub(r'<g transform="translate\(([\d.]+) ([\d.]+)\)',
+                     lambda m: f'<g transform="translate({m.group(1)} {f(float(m.group(2)) + HOLD_DY)})',
+                     src, count=1)
+        hug = hug.replace("hug position", "cat hug position (nudged up off the keyboard rim)")
+        (ACC / f"{item}.svg").write_text(hug)
 
 
 # ---------------------------------------------------------------- icons
