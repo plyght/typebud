@@ -4,7 +4,7 @@
   <circle cx="113" cy="100.8" r="12" fill="#FFFFFF" fill-opacity="0.3"/>
   <circle cx="152.2" cy="99.3" r="13" fill="#FFFFFF" fill-opacity="0.3"/>
   <path d="M106 94.8 Q108 92.3 111.5 91.8 M144.7 92.3 Q146.7 89.8 150.2 89.3" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M126.3 99.3 L128.7 97.3 L130 96.7 L132.4 95.9 L134.9 96 L136.2 96.3 L138.7 97.7M165.6 98.5 L202.9 94.7M99.6 100.8 L83 100.1" fill="none" stroke="#3B2A1E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M126.3 99.3 L128.7 97.3 L130 96.7 L132.4 95.9 L134.9 96 L136.2 96.3 L138.7 97.7M165.6 98.5 L202.4 94.7M99.6 100.8 L83 100.1" fill="none" stroke="#3B2A1E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
   <circle cx="113" cy="100.8" r="12" fill="none" stroke="#3B2A1E" stroke-width="4.5"/>
   <circle cx="152.2" cy="99.3" r="13" fill="none" stroke="#3B2A1E" stroke-width="4.5"/>
   <circle cx="113" cy="100.8" r="12" fill="none" stroke="#C98A4B" stroke-width="1.8"/>

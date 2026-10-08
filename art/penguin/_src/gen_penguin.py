@@ -17,7 +17,7 @@ from pathlib import Path
 from shapely import affinity
 from shapely.geometry import LineString, MultiPolygon, Point, Polygon, box
 import shapely
-from shapely.ops import unary_union
+from shapely.ops import substring, unary_union
 
 OUT = Path(__file__).resolve().parent.parent
 ACC = OUT / "acc"
@@ -271,7 +271,7 @@ def feet_layers(hop=False):
 # ---------------------------------------------------------------- face
 EYE_L, EYE_R = (115, 90), (153, 88)
 BEAK_C = (134, 101)
-BLUSH_L, BLUSH_R = (101, 104), (169, 102)
+BLUSH_L, BLUSH_R = (104, 104), (168.5, 102)
 
 
 def face_layers(eyes, mouth, w=None, hop=False):
@@ -336,7 +336,7 @@ def face_layers(eyes, mouth, w=None, hop=False):
 
 
 # ---------------------------------------------------------------- flippers
-SHOULDER = {"L": (84, 148), "R": (201, 158)}
+SHOULDER = {"L": (84, 146), "R": (200, 163)}
 REST = {"L": key(1.2, 4.3), "R": key(13.2, 4.1)}
 
 
@@ -356,27 +356,69 @@ FLIP_CUT = 12.5
 FLIP_FILL = SHEEN
 
 
-def flipper(side, tip, bow, sleeping=False, clip_kb=False, rmax=14.0, root=None):
+def taper_line(geom, w0=5.0, w1=1.6, keep=0.8):
+    """A line drawn as a filled shape that thins from w0 (at its first point) to w1 and stops at
+    `keep` of its length, so a flipper's root contour melts into the body instead of ending hard."""
+    pts = list(geom.coords)
+    ln = LineString(pts)
+    n = max(6, int(ln.length * keep / 1.2))
+    sub = [ln.interpolate(ln.length * keep * i / n) for i in range(n + 1)]
+    return vtube([(q.x, q.y) for q in sub], lambda t: (w0 + (w1 - w0) * t) / 2)
+
+
+def flipper(side, tip, bow, sleeping=False, clip_kb=False, rmax=14.0, root=None, rtip=6.5, raised=False):
     root = root or SHOULDER[side]
     if sleeping:
         root = sleep_w(*root)
-    poly, curve = flipper_shape(root, tip, bow, rmax)
+    poly, curve = flipper_shape(root, tip, bow, rmax, rtip)
+    sil = W(SIL, sleep_w) if sleeping else SIL
+    if raised:
+        # flung out past the flank: the flipper comes out from behind the body outline
+        poly = poly.difference(sil.buffer(2.5))
+    else:
+        # hanging against the flank: the body outline is the flipper's outer contour
+        poly = poly.intersection(sil.buffer(-2.5))
+    if poly.geom_type != "Polygon":
+        poly = max(poly.geoms, key=lambda g: g.area)
     if clip_kb:
         poly = poly.intersection(above_kb(2))
-    rootdisc = Point(root).buffer(12.2)
-    # shade on the side away from the light, sheen along the upper/outer edge
-    shade = poly.difference(affinity.translate(poly, -5.5, -3)).difference(rootdisc.buffer(1))
-    sheen = poly.buffer(-3.6).difference(affinity.translate(poly, 2.4, 3.0)).difference(rootdisc.buffer(4))
-    sheen = Polygon() if FLIP_FILL == SHEEN else sheen
-    sheen = sheen.intersection(Point(curve[len(curve) // 2]).buffer(30)).buffer(-0.5).buffer(0.5)
-    sil = W(SIL, sleep_w) if sleeping else SIL
-    cut = Point(root).buffer(FLIP_CUT).intersection(sil.buffer(-1))
-    edge = poly.boundary.difference(cut)
-    joint = poly.boundary.intersection(cut.buffer(-1.5))
+    # shade on the side away from the light
+    # (it fades in along the flipper instead of stopping square at the shoulder)
+    nfade = int(len(curve) * 0.5)
+    fade = vtube(curve[:nfade], lambda t: 14.5 - 7.5 * t)
+    shade = poly.difference(affinity.translate(poly, -5.5, -3)).difference(fade).buffer(-0.6).buffer(0.6)
+    # contour: drop the stretch that lies on the body outline (already drawn), and turn the stretch
+    # around the root into a contour that tapers off toward the shoulder
+    on_body = (sil.buffer(2.5).exterior if raised else sil.buffer(-2.5).exterior).buffer(0.35)
+    rest = poly.exterior.difference(on_body)
     if clip_kb:
-        edge = edge.difference(above_kb(2).exterior.buffer(0.01)).intersection(above_kb(2.5))
+        rest = rest.difference(above_kb(2).exterior.buffer(0.35))
+    rest = shapely.line_merge(rest) if rest.geom_type == "MultiLineString" else rest
+    lines = list(rest.geoms) if hasattr(rest, "geoms") else [rest]
+    cut = Point(root).buffer(FLIP_CUT + (4 if raised else 0))
+    edge, crease = [], []
+    for ln in lines:
+        if ln.length < 1:
+            continue
+        a, b = Point(ln.coords[0]), Point(ln.coords[-1])
+        # the upper contour that starts at the body outline by the shoulder tapers off into it
+        ends = sorted(((a, list(ln.coords)), (b, list(ln.coords)[::-1])), key=lambda e: e[0].y)[:1]
+        for end, pts in ([] if raised else ends):
+            if end.within(cut.buffer(0.5)):
+                lsr = LineString(pts)
+                inner = lsr.intersection(cut)
+                pieces = list(inner.geoms) if hasattr(inner, "geoms") else [inner]
+                pieces = [q for q in pieces if not q.is_empty and q.distance(end) < 0.05]
+                if pieces and pieces[0].length > 1:
+                    k = pieces[0].length
+                    head = substring(lsr, 0, k)
+                    crease.append(taper_line(LineString(list(head.coords)[::-1]), 5.0, 2.6, 1.0))
+                    ln = substring(lsr, k, lsr.length)
+        edge.append(ln)
+    edge = unary_union(edge)
     d = poly_d(poly)
-    return [fill(d, FLIP_FILL), fill(poly_d(sheen), SHEEN), fill(poly_d(shade), MAIN if FLIP_FILL == SHEEN else SHADE), stroke(line_d(joint), 3), stroke(line_d(edge), 5)]
+    return [fill(d, FLIP_FILL), fill(poly_d(shade), MAIN), fill(poly_d(unary_union(crease)), LINE) if crease else "",
+            stroke(line_d(edge), 5)]
 
 
 def flip_tip(side, state):
@@ -412,8 +454,8 @@ def paws_layer(ls, rs, sleeping=False):
 def excited_paws():
     # flippers flung out and up, flapping
     out = []
-    out += flipper("L", (54, 112), 6, False, rmax=12)
-    out += flipper("R", (232, 118), -6, False, rmax=12)
+    out += flipper("L", (54, 112), 6, False, rmax=12, raised=True)
+    out += flipper("R", (232, 118), -6, False, rmax=12, raised=True)
     return out
 
 
@@ -423,13 +465,14 @@ SIP_AT = (138, 117, -16)
 
 
 def hug_paws(kind):
+    # paddle-shaped (wide root, small tip), roots high enough that the scoop clears the keyboard
     if kind == "hold":
-        lt, rt, bl, br = (127, 156), (157, 154), 15, -15
+        lt, rt, bl, br, rl, rr = (127, 155), (157, 153), 13, -13, (88, 138), (198, 146)
     else:
-        lt, rt, bl, br = (122, 124), (156, 116), 10, -10
+        lt, rt, bl, br, rl, rr = (122, 124), (157, 118), 10, -10, (88, 138), (196, 141)
     out = []
-    out += flipper("L", lt, bl, clip_kb=True, rmax=12.5, root=(88, 142))
-    out += flipper("R", rt, br, clip_kb=True, rmax=12.5, root=(198, 150))
+    out += flipper("L", lt, bl, clip_kb=True, rmax=12.5, root=rl, rtip=5.5)
+    out += flipper("R", rt, br, clip_kb=True, rmax=12.5, root=rr, rtip=5.5)
     return out
 
 
@@ -558,7 +601,8 @@ def glasses(w):
     (lx, ly), (rx, ry) = Wp(EYE_L, w), Wp(EYE_R, w)
     r = 13
     bridge = W(LineString(cubic((128, 88), (132, 83), (136, 82), (140, 86), 10)), w)
-    arm = W(LineString([(166, 87), (202, 82)]), w)
+    # temple arm runs back to the head outline and stops on it (round cap tucked into the line)
+    arm = W(LineString([(166, 87), (202, 82)]).intersection(SIL.buffer(-2.5)), w)
     farm = W(LineString([(102, 90), (86, 89)]), w)
     return ["<g>",
             f'<circle cx="{f(lx)}" cy="{f(ly)}" r="{r - 1}" fill="#FFFFFF" fill-opacity="0.3"/>',
@@ -594,7 +638,7 @@ def build_hold():
         for name, (x, y, r) in (("hold", HOLD_AT), ("sip", SIP_AT)):
             rr = r + (-14 if item == "book" else 0)
             if item == "book" and name == "sip":
-                x, y, rr = 139, 133, -10   # reading: held up at the chest, below the eyes
+                x, y, rr = 139, 137, -10   # reading: held up at the chest, below the eyes
             out = re.sub(r'<g transform="translate\([^)]*\) rotate\([^)]*\)">',
                          f'<g transform="translate({x} {y}) rotate({rr})">', src, count=1)
             out = out.replace("hug position", f"penguin {name} position")
@@ -650,9 +694,10 @@ def build_icons():
     write(OUT / "icon.svg", body, "typebud penguin icon: front face only, outline 16, eyes 18; reads at 16 px.")
     sil = unary_union([head, tuft.buffer(-1)]).buffer(8, join_style="round").union(tuft.buffer(7))
     holes = unary_union([
-        LineString(cubic((68, 146), (77, 149), (87, 149), (96, 146), 12)).buffer(11),
-        LineString(cubic((160, 146), (169, 149), (179, 149), (188, 146), 12)).buffer(11),
-        beak.buffer(3),
+        # eye slots sized and placed on the 16 px grid (cols 4-5 / 10-11, row 9) so they stay crisp
+        LineString([(72, 152), (88, 152)]).buffer(8),
+        LineString([(168, 152), (184, 152)]).buffer(8),
+        beak.buffer(4.5),
     ])
     write(OUT / "icon_template.svg", [f'<path d="{poly_d(sil.difference(holes))}" fill="#000000" fill-rule="evenodd"/>'],
           "typebud penguin icon template: pure black silhouette, eyes and beak cut out (even-odd).")
