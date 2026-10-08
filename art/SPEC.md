@@ -161,7 +161,7 @@ the head); only eyes, mouth, and paws change. Frames contain no keyboard, gear, 
 4. `acc/<head item>.svg` (or `acc/<head item>_sleep.svg` in `sleep`/`wake`): `headphones`, `beanie`,
    `party_hat`, `bow`, `glasses`.
 5. `acc/keyboard.svg`.
-6. `acc/hold_<item>.svg`: only with `hold`/`sip` (`hold_coffee`, `hold_boba`, `hold_book`).
+6. `acc/hold_<item>.svg`: only with `hold`/`sip` (`hold_coffee`, `hold_boba`, `hold_book`). The `sip` frame uses `acc/sip_<item>.svg` (`sip_coffee`, `sip_boba`, `sip_book`: the item raised to the mouth) when the animal provides one, else `hold_<item>`.
 7. `<frame>_paws.svg`: forearms and paws, over the keyboard's back edge and around the held item.
 8. Overlays: `acc/music_notes.svg` (headphones on and a typing frame), `acc/motion.svg` (`excited`),
    `acc/zzz.svg` (`sleep`).

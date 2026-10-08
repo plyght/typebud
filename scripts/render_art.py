@@ -111,7 +111,9 @@ class Animal:
         if keyboard:
             names.append("acc/keyboard")
         if hold and frame in ("hold", "sip"):
-            names.append(f"acc/{hold}")
+            # sip uses the item raised to the mouth (acc/sip_<item>) when the animal has one
+            sip = "acc/sip_" + hold.removeprefix("hold_")
+            names.append(sip if frame == "sip" and self.find(sip) else f"acc/{hold}")
         names.append(f"{frame}_paws")
         if head == "headphones" and frame in TYPING:
             names.append("acc/music_notes")
