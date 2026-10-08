@@ -1,0 +1,60 @@
+name: zpui Windows
+
+# Builds zpui's Windows backend (Win32 + D3D11/DirectComposition + DirectWrite) and runs
+# its smoke demo on a real Windows runner: a normal window, a transparent always-on-top
+# overlay and a native-controls panel are rendered, read back and saved as PNGs.
+
+on:
+  push:
+    paths: [.github/workflows/zpui-windows.yml]
+  workflow_dispatch:
+    inputs:
+      zpui_ref:
+        description: plyght/zpui ref (branch, tag or commit) to build
+        required: false
+        default: main
+
+jobs:
+  windows-smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: plyght/zpui
+          ref: ${{ inputs.zpui_ref || 'main' }}
+          path: zpui
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      # Normal window + transparent overlay + native-controls panel: renders 30 frames each,
+      # reads the presented frames back, checks idle (0 frames / CPU), writes zig-out/windows-*.png.
+      - name: windows-window smoke
+        working-directory: zpui
+        run: zig build windows-window --summary all
+        env:
+          ZPUI_SMOKE_FRAMES: "30"
+      # The cross-platform overlay demo: 60 anchored resizes, hide / show, 2 s idle check.
+      - name: overlay-demo smoke
+        if: always()
+        working-directory: zpui
+        run: zig build overlay-demo --summary all
+        env:
+          ZPUI_SMOKE_FRAMES: "30"
+      # Preferences page with real Win32 controls (App framework + native controls).
+      - name: prefs-demo smoke
+        if: always()
+        working-directory: zpui
+        run: zig build prefs-demo --summary all
+        env:
+          ZPUI_SMOKE_FRAMES: "20"
+      - name: zpui tests (Windows)
+        if: always()
+        working-directory: zpui
+        run: zig build zpui-test --summary all
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zpui-windows-smoke
+          path: zpui/zig-out/*.png
+          if-no-files-found: warn
