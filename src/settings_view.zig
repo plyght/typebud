@@ -134,11 +134,11 @@ pub const SettingsView = struct {
         const tb = app_mod.instance;
         const scale = window.scaleFactor();
         self.ensureIcons(scale);
-        var tiles = div().flex().flexRow().flexWrap().gap(px(10)).minW(px(84 * 4 + 30));
+        var tiles = div().flex().flexRow().flexWrap().gap(px(8)).w(px(72 * 4 + 8 * 3));
         for (tb.catalog.list(), 0..) |a, i| {
             const on = i == tb.animal;
             const icon_ctx = IconCtx{ .view = self, .index = i };
-            tiles = tiles.child(div().id(.{ "animal", i }).flex().flexCol().itemsCenter().gap(px(4)).w(px(84)).py(px(8))
+            tiles = tiles.child(div().id(.{ "animal", i }).flex().flexCol().itemsCenter().gap(px(4)).w(px(72)).py(px(8))
                 .rounded(px(look.card_radius)).bg(if (on) look.toggle_checked else look.card_bg)
                 .border2().borderColor(if (on) look.accent else zpui.color.transparent_black)
                 .cursorPointer().hover(sb.bg(if (on) look.toggle_checked else look.button_hover))
@@ -147,11 +147,11 @@ pub const SettingsView = struct {
                 .child(zpui.canvas(icon_ctx, paintIcon).w(px(48)).h(px(48)))
                 .child(div().textSize(px(look.small_font_size)).child(capitalized(a.name))));
         }
-        const preview = div().flexNone().w(px(176)).h(px(176)).rounded(px(look.card_radius)).bg(previewBg(tb.settings.vibe)).overflowHidden()
+        const preview = div().flexNone().w(px(160)).h(px(160)).rounded(px(look.card_radius)).bg(previewBg(tb.settings.vibe)).overflowHidden()
             .child(zpui.canvas(self, paintPreview).size(zpui.relative(1)));
-        return div().flex().flexRow().gap(px(16)).itemsCenter().p(px(12)).wFull().rounded(px(look.card_radius)).bg(look.card_bg)
+        return div().flex().flexRow().gap(px(14)).itemsCenter().p(px(12)).w(px(160 + 14 + 72 * 4 + 24 + 24)).maxW(zpui.relative(1)).rounded(px(look.card_radius)).bg(look.card_bg)
             .child(preview)
-            .child(div().flex1().minW(px(0)).child(tiles));
+            .child(tiles);
     }
 
     fn ensureIcons(self: *SettingsView, scale: f32) void {
