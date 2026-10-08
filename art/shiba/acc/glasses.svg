@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- typebud shiba: round glasses over the eyes. -->
+  <g>
+  <circle cx="122.5" cy="87.0" r="13" fill="#FFFFFF" fill-opacity="0.28"/>
+  <circle cx="165.5" cy="86.0" r="13" fill="#FFFFFF" fill-opacity="0.28"/>
+  <path d="M115.0 80.0 Q117.5 77.5 121.0 77.0 M158.0 79.0 Q160.5 76.5 164.0 76.0" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M135.5 86.0 Q144 80.5 152.5 84.5 M178.5 85.0 L208 80.0 M109.5 87.5 L86 85.0" fill="none" stroke="#3B2A1E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="122.5" cy="87.0" r="13" fill="none" stroke="#3B2A1E" stroke-width="4.5"/>
+  <circle cx="165.5" cy="86.0" r="13" fill="none" stroke="#3B2A1E" stroke-width="4.5"/>
+  <circle cx="122.5" cy="87.0" r="13" fill="none" stroke="#C98A4B" stroke-width="1.8"/>
+  <circle cx="165.5" cy="86.0" r="13" fill="none" stroke="#C98A4B" stroke-width="1.8"/>
+  </g>
+</svg>

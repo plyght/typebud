@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- typebud shared held coffee, shiba sip position (raised to the muzzle). Geometry is drawn around (0,0); move/tilt it with the
+       group transform only. Hug anchor = translate(164 140), tilt 10deg. Sleeve uses gear token cup_sleeve. -->
+  <g transform="translate(135 124) rotate(-20)">
+    <!-- cup body -->
+    <path d="M-13 -13 L13 -13 L10 22 Q0 25 -10 22 Z" fill="#FFF8EE" stroke="#3B2A1E" stroke-width="4.5" stroke-linejoin="round"/>
+    <path d="M6 -13 L13 -13 L10 22 Q7 23 4 23 Z" fill="#EADCC8"/>
+    <!-- sleeve -->
+    <path d="M-12.2 -3 L12.2 -3 L11.2 10 L-11.2 10 Z" fill="#565E70" stroke="#3B2A1E" stroke-width="3.5" stroke-linejoin="round"/>
+    <circle cx="-1" cy="3.5" r="3.6" fill="#FFF8EE" stroke="#3B2A1E" stroke-width="2.5"/>
+    <!-- lid -->
+    <path d="M-16 -13 L16 -13 L15 -18 L-15 -18 Z" fill="#F1E4D2" stroke="#3B2A1E" stroke-width="4.5" stroke-linejoin="round"/>
+    <path d="M-11 -18 L-9 -23 L9 -23 L11 -18 Z" fill="#F1E4D2" stroke="#3B2A1E" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M-8 -6 L-9 18" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+</svg>

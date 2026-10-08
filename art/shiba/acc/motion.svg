@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- typebud shiba motion marks for excited: the shared paw dashes, moved with the keyboard, plus wag marks around the curled tail. Outlined strokes (7 outline under a 2.6 cream core). -->
+  <g transform="translate(1 6)">
+  <path d="M101 155 L95 151 M106 146 L102 140 M99 167 L92 167 M181 185 L188 187 M178 196 L183 201 M175 168 L180 163" fill="none" stroke="#3B2A1E" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M101 155 L95 151 M106 146 L102 140 M99 167 L92 167 M181 185 L188 187 M178 196 L183 201 M175 168 L180 163" fill="none" stroke="#FBE3A0" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <path d="M232 124 L236.5 118.5 M237 173 L242.5 176.5" fill="none" stroke="#3B2A1E" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M232 124 L236.5 118.5 M237 173 L242.5 176.5" fill="none" stroke="#FBE3A0" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

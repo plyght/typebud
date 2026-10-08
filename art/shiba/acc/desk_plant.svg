@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- typebud shared desk plant, shiba copy: raised so the leaves show above the curled tail (pot hidden behind it). Fixed colors. -->
+  <g transform="translate(-1 -18)">
+  <!-- leaves -->
+  <path d="M222 158 C206 156 200 140 204 128 C214 130 224 142 222 158 Z" fill="#8CC084" stroke="#3B2A1E" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M224 158 C222 140 228 124 238 118 C242 132 238 150 224 158 Z" fill="#8CC084" stroke="#3B2A1E" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M222 158 C214 142 216 120 224 110 C232 122 232 144 222 158 Z" fill="#9FCC93" stroke="#3B2A1E" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M222 156 C220 140 222 126 224 118 M221 156 C214 148 210 140 207 133 M225 155 C230 144 234 134 236 126" fill="none" stroke="#6FA56A" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- pot -->
+  <path d="M208 160 L236 160 L232 180 Q222 183 212 180 Z" fill="#E39575" stroke="#3B2A1E" stroke-width="4.5" stroke-linejoin="round"/>
+  <path d="M227 163 L234 163 L231 179 Q228 180.5 225 181 Z" fill="#C97A5C"/>
+  <path d="M205 154 L239 154 L239 161 L205 161 Z" fill="#EDAA8C" stroke="#3B2A1E" stroke-width="4.5" stroke-linejoin="round"/>
+  </g>
+</svg>
