@@ -1,0 +1,109 @@
+name: zpui text (macOS)
+
+# CoreText checks for a plyght/zpui ref on real macOS:
+# - `zig build zpui-test` (includes the macOS-only CoreText tests: AppKit advance parity for
+#   weights 400-700 at 11-28 px, raster transforms identity/shear, end to end);
+# - the glyph transform demo (examples/glyph_transform_demo.zig: keycap legends on a sheared
+#   keyboard plane, composited vs raster-transformed) as a smoke test, uploading its PNG;
+# - zpui's font-compare (native AppKit NSTextField vs zpui, tools/font-compare) against the
+#   same ref, uploading the sheets and deltas.
+# Apple Silicon runners expose no Metal device, so the demo (Metal) only has to pass on the
+# Intel runners; it is attempted everywhere.
+
+on:
+  workflow_dispatch:
+    inputs:
+      zpui_ref:
+        description: plyght/zpui branch, tag or commit to test
+        default: main
+
+env:
+  ZPUI_REF: ${{ inputs.zpui_ref || 'main' }}
+
+jobs:
+  zpui-text:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel, macos-26, macos-26-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: plyght/zpui
+          ref: ${{ env.ZPUI_REF }}
+          path: zpui
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      - name: macOS version
+        run: |
+          sw_vers
+          uname -m
+          defaults read -g AppleFontSmoothing 2>&1 || echo "AppleFontSmoothing unset"
+          git -C zpui log -1 --format='zpui %H %s'
+      - name: zpui-test (CoreText included)
+        working-directory: zpui
+        run: zig build zpui-test --summary all
+      - name: Glyph transform demo (smoke)
+        working-directory: zpui
+        timeout-minutes: 10
+        continue-on-error: ${{ !endsWith(matrix.os, '-intel') }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/glyph"
+          ZPUI_SMOKE_FRAMES=30 zig build glyph-transform-demo --summary all 2>&1 | tee "$RUNNER_TEMP/glyph/demo.log"
+          cp zig-out/glyph-transform-demo.png "$RUNNER_TEMP/glyph/glyph-transform-demo.png"
+          # The same scene at 2x device scale.
+          ZPUI_DEMO_SCALE=2 ZPUI_SMOKE_FRAMES=10 zig build glyph-transform-demo 2>&1 | tee -a "$RUNNER_TEMP/glyph/demo.log"
+          cp zig-out/glyph-transform-demo.png "$RUNNER_TEMP/glyph/glyph-transform-demo@2x.png"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zpui-glyph-transform-${{ matrix.os }}
+          path: ${{ runner.temp }}/glyph/
+          if-no-files-found: warn
+
+  font-compare:
+    # As zpui's .github/workflows/font-compare.yml, against the requested ref.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15-intel, macos-26]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: zpui
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: plyght/zpui
+          ref: ${{ env.ZPUI_REF }}
+          path: zpui
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      - name: macOS version
+        run: |
+          sw_vers
+          defaults read -g AppleFontSmoothing 2>&1 || echo "AppleFontSmoothing unset"
+          system_profiler SPDisplaysDataType 2>/dev/null | grep -E "Resolution|Retina|UI Looks" || true
+      - name: Pillow
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet pillow
+      - name: Native (AppKit)
+        run: swift tools/font-compare/native.swift tools/font-compare/cases.json zig-out/font-compare 2>&1 | tee zig-out-native.log
+      - name: zpui
+        run: zig build font-compare --summary all -- tools/font-compare/cases.json zig-out/font-compare
+      - name: Compare
+        run: |
+          "$RUNNER_TEMP/venv/bin/python3" tools/font-compare/compare.py tools/font-compare/cases.json zig-out/font-compare
+          cp zig-out-native.log zig-out/font-compare/native.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zpui-font-compare-${{ matrix.os }}
+          path: zpui/zig-out/font-compare/
