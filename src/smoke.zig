@@ -105,6 +105,8 @@ fn sFast(tb: *Typebud) void {
 }
 
 fn sExcited(tb: *Typebud) void {
+    const t = &st.typist;
+    note(tb, "fast burst: {d} keys, longest gap {d} ms, fell idle {d}x between keys", .{ t.n, t.max_gap_ns / std.time.ns_per_ms, t.idle_drops });
     expectFrame(tb, &.{.excited}, "fast typing");
     snapLive(tb, "3_excited");
 }

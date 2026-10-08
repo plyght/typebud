@@ -72,6 +72,11 @@ pub const Typist = struct {
     /// Identifies the current run so a stale timer from a previous run stops.
     run_id: u32 = 0,
     timer_ctx: [4]TimerCtx = undefined,
+    /// Diagnostics for the current run: when the last press was injected, the longest
+    /// gap between two presses, and how often the pet had fallen back to idle in between.
+    last_press_ns: u64 = 0,
+    max_gap_ns: u64 = 0,
+    idle_drops: u32 = 0,
 
     const Up = struct { tb: *Typebud, key: zpui.platform.GlobalKeyClass, x: f32 };
     const TimerCtx = struct { t: *Typist, run: u32 };
@@ -82,6 +87,9 @@ pub const Typist = struct {
         t.left = count;
         t.interval_ms = interval_ms;
         t.n = 0;
+        t.last_press_ns = 0;
+        t.max_gap_ns = 0;
+        t.idle_drops = 0;
         t.run_id +%= 1;
         const c = &t.timer_ctx[t.run_id % t.timer_ctx.len];
         c.* = .{ .t = t, .run = t.run_id };
@@ -115,7 +123,13 @@ pub const Typist = struct {
                 if (t.n % 23 == 0) key = .backspace;
             },
         }
-        t.tb.handleInput(.{ .kind = .key_down, .key = key, .key_x = x, .timestamp_ns = t.tb.now() });
+        const now = t.tb.now();
+        if (t.last_press_ns != 0) {
+            t.max_gap_ns = @max(t.max_gap_ns, now -| t.last_press_ns);
+            if (t.tb.state.mode == .idle) t.idle_drops += 1;
+        }
+        t.last_press_ns = now;
+        t.tb.handleInput(.{ .kind = .key_down, .key = key, .key_x = x, .timestamp_ns = now });
         const up = &t.pending_up[t.up_index % t.pending_up.len];
         t.up_index += 1;
         up.* = .{ .tb = t.tb, .key = key, .x = x };
