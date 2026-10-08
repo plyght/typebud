@@ -110,6 +110,18 @@ def line_d(geom, tol=0.15):
     return "".join(parts)
 
 
+def scale_d(d, sx, sy=None, ox=0.0, oy=0.0, tx=None, ty=None):
+    """Scale absolute path data (M/L/Q/C/Z only) about (ox, oy), landing the origin on (tx, ty).
+    Used to resize a few hand-drawn items without scaling their strokes."""
+    sy = sx if sy is None else sy
+    tx, ty = (ox if tx is None else tx), (oy if ty is None else ty)
+    nums = iter(re.findall(r"-?\d+(?:\.\d+)?", d))
+    def pair(_m):
+        x, y = float(next(nums)), float(next(nums))
+        return f"{f(tx + (x - ox) * sx)} {f(ty + (y - oy) * sy)}"
+    return re.sub(r"-?\d+(?:\.\d+)?[ ,]-?\d+(?:\.\d+)?", pair, d)
+
+
 def fill(d, color, extra=""):
     return f'<path d="{d}" fill="{color}"{extra}/>' if d else ""
 
@@ -238,7 +250,7 @@ def face(eyes, mouth):
     out = []
     # blush on the cheeks, outside the snout
     out += [f'<ellipse cx="136" cy="80" rx="8" ry="4.5" fill="{BLUSH}"/>',
-            f'<ellipse cx="45" cy="81" rx="5" ry="4" fill="{BLUSH}"/>',
+            f'<ellipse cx="48" cy="77.5" rx="4.6" ry="3.6" fill="{BLUSH}"/>',
             stroke("M132 82 L134 78 M135.5 82.5 L137.5 78.5 M139 82 L141 78", 1.6, HATCH)]
     (lx, ly), (rx, ry) = EYE_L, EYE_R
 
@@ -348,17 +360,23 @@ def paw_shape(c, rot, rx, ry, deco):
     return out
 
 
-def arm(curve, head_clip, r0=13.5, r1=12.0, below_kb=False, shaded=True):
+def arm(curve, head_clip, r0=13.5, r1=12.0, below_kb=False, shaded=True, min_area=0.0, paw=None):
     poly = tube(curve, r0, r1)
     root = Point(curve[0]).buffer(r0 + 1.2)
     if head_clip is not None:
         poly = poly.difference(head_clip.buffer(2.0))
     if below_kb:
         poly = poly.difference(KB_FRONT)
+    if paw is not None and poly.difference(paw.buffer(2.0)).area < min_area:
+        return []  # only a sliver would peek out past the foot (sleep): let the foot alone show
     shade = shade_of(poly, -5, -2).intersection(Point(curve[-1]).buffer(18))
+    if head_clip is not None:
+        # the head's cast shadow where the leg comes out from under the chin (separates leg and snout)
+        shade = unary_union([shade, poly.intersection(affinity.translate(head_clip, 2, 7))])
     edge = poly.boundary.difference(root)
     if below_kb:
-        edge = edge.difference(KB_FRONT.buffer(-1.0))
+        # the fur simply disappears behind the keyboard's back edge: no outline along the cut
+        edge = edge.difference(KB_FRONT.buffer(0.3))
     if head_clip is not None:
         edge = edge.difference(head_clip.buffer(3.4))
     d = poly_d(poly)
@@ -378,8 +396,8 @@ def paws_layer(lstate, rstate, sleeping=False):
     out = []
     states = [("L", lstate), ("R", rstate)]
     for side, st in states:
-        c, *_ = paw_state(st, side)
-        out += arm(type_curve(side, c), head)
+        c, rot, rx, ry, _ = paw_state(st, side)
+        out += arm(type_curve(side, c), head, paw=ellipse_poly(*c, rx, ry, rot), min_area=40 if sleeping else 0)
     for side, st in states:
         out += paw_shape(*paw_state(st, side))
     return out
@@ -393,13 +411,15 @@ SIP_PAWS = ((94, 148), (120, 141))
 
 
 def hug_curve(side, paw, kind):
+    """Chubby forelegs: they rise from behind the keyboard's back edge with the elbow bowed out, then
+    curl in so the feet press on the item's sides."""
     if kind == "hug":
         if side == "L":
-            return cubic((124, 190), (125, 178), (127, 166), paw, 24)
-        return cubic((172, 190), (172, 176), (169, 162), paw, 24)
+            return cubic((114, 198), (106, 174), (112, 158), paw, 24)
+        return cubic((182, 198), (187, 172), (181, 155), paw, 24)
     if side == "L":
-        return cubic((88, 176), (89, 166), (91, 156), paw, 24)
-    return cubic((128, 178), (127, 166), (123, 152), paw, 24)
+        return cubic((82, 192), (76, 168), (82, 152), paw, 24)
+    return cubic((136, 194), (142, 166), (134, 146), paw, 24)
 
 
 def hug_paws(kind):
@@ -408,11 +428,13 @@ def hug_paws(kind):
     clip = HEAD_ALL if kind == "hug" else None
     out = []
     for side, p in (("L", pl), ("R", pr)):
-        r = (13.5, 12.5)
-        out += arm(hug_curve(side, p, kind), clip, *r, below_kb=True, shaded=False)
+        out += arm(hug_curve(side, p, kind), clip, 16.0, 13.0, below_kb=True)
     for (cx, cy), rot in ((pl, rl), (pr, rr)):
-        out.append(f'<ellipse cx="{cx}" cy="{cy}" rx="10.5" ry="8.5" transform="rotate({rot} {cx} {cy})" '
-                   f'fill="{DARK}" stroke="{LINE}" stroke-width="4.5"/>')
+        pe = ellipse_poly(cx, cy, 11, 9, rot)
+        out += [f'<ellipse cx="{cx}" cy="{cy}" rx="11" ry="9" transform="rotate({rot} {cx} {cy})" fill="{DARK}"/>',
+                fill(poly_d(shade_of(pe, -3.5, -3)), DARK_SH),
+                f'<ellipse cx="{cx}" cy="{cy}" rx="11" ry="9" transform="rotate({rot} {cx} {cy})" '
+                f'fill="none" stroke="{LINE}" stroke-width="4.5"/>']
     (lx, ly), (rx_, ry_) = pl, pr
     out.append(stroke(f"M{lx + 3} {ly - 4} L{lx + 6.5} {ly - 5} M{lx + 4} {ly + 2.5} L{lx + 7.5} {ly + 2} "
                       f"M{rx_ - 3} {ry_ - 4} L{rx_ - 6.5} {ry_ - 4.5} M{rx_ - 3.5} {ry_ + 2.5} L{rx_ - 7} {ry_ + 2.5}",
@@ -491,8 +513,7 @@ def beanie_body():
     top = unary_union([HEAD.buffer(3.5), ellipse_poly(104, 40, 60, 24)])
     dome = top.intersection(Polygon(cuff_lo + [(200, 0), (20, 0)]))
     cuff = Polygon(cuff_lo + cuff_hi[::-1]).buffer(1.5).intersection(top.buffer(0.5))
-    hat = unary_union([dome, cuff]).difference(EARS.buffer(1.0))
-    cuff = cuff.difference(EARS.buffer(1.0))
+    hat = unary_union([dome, cuff])
     shade = hat.difference(affinity.translate(hat, -7, -3))
     ribs = []
     for k in range(13):
@@ -500,30 +521,51 @@ def beanie_body():
         ribs.append(LineString([(x, y - 2.5), (x, y - 9)]))
     ribs = unary_union(ribs).intersection(cuff.buffer(-1.5))
     hd = poly_d(hat)
-    return [fill(hd, BEANIE_C, ' fill-rule="evenodd"'), fill(poly_d(shade), BEANIE_SH),
-            stroke(line_d(ribs), 2.2, BEANIE_RIB), stroke(poly_d(cuff), 3.5), stroke(hd, 4.5),
+    # the ears poke out of the knit just above the cuff: redraw their tips over the hat; the cuff's
+    # top line closes them off
+    below = Polygon(cuff_hi + [(256, 256), (0, 256)])
+    ears = []
+    for side in "LR":
+        _, ep, di = ear(side)
+        tip = ep.difference(below)
+        ears += [fill(poly_d(tip), DARK), stroke(line_d(tip.boundary.difference(below.buffer(0.6))), 5),
+                 stroke(di, 3.5, DARK_SH)]
+    return [fill(hd, BEANIE_C), fill(poly_d(shade), BEANIE_SH), stroke(line_d(ribs), 2.2, BEANIE_RIB),
+            stroke(hd, 4.5)] + ears + [stroke(poly_d(cuff), 3.5),
             f'<circle cx="104" cy="19" r="7" fill="{BEANIE_C}" stroke="{LINE}" stroke-width="4"/>']
 
 
 def party_hat_body():
-    d = "M86 39 Q83 36 85 33 L101 13 Q104 10 107 13 L121 32 Q123 35.5 119 37.5 Q102 41.5 86 39Z"
-    cone = Polygon([(86, 39), (85, 33), (101, 13), (104, 11), (107, 13), (121, 32), (119, 37.5), (102, 41)])
-    stripes = unary_union([LineString([(84, 27), (125, 20)]).buffer(2.4),
-                           LineString([(82, 40), (128, 31)]).buffer(2.2)]).intersection(cone.buffer(-0.5))
-    shade = cone.difference(affinity.translate(cone, -5, 0))
-    return ['<g transform="translate(0 3)">', fill(d, "#F7A8C4"), fill(poly_d(shade), "#E68AAD"), fill(poly_d(stripes), CREAM), stroke(d, 4.5),
-            f'<circle cx="104" cy="12" r="4.4" fill="{CREAM}" stroke="{LINE}" stroke-width="3.5"/>',
-            f'<circle cx="96" cy="28" r="1.9" fill="#7FB8C8"/><circle cx="111" cy="30" r="1.9" fill="#7FB8C8"/>', "</g>"]
+    sx, sy, base = 1.4, 1.2, 48          # resize about the cone's base centre (103, 40)
+
+    def T(x, y):
+        return (103 + (x - 103) * sx, base + (y - 40) * sy)
+
+    d = scale_d("M86 39 Q83 36 85 33 L101 13 Q104 10 107 13 L121 32 Q123 35.5 119 37.5 Q102 41.5 86 39Z",
+                sx, sy, 103, 40, 103, base)
+    cone = Polygon([T(*p) for p in [(86, 39), (85, 33), (101, 13), (104, 11), (107, 13), (121, 32), (119, 37.5), (102, 41)]])
+    stripes = unary_union([LineString([T(84, 27), T(125, 20)]).buffer(3.0),
+                           LineString([T(82, 40), T(128, 31)]).buffer(2.8)]).intersection(cone.buffer(-0.5))
+    shade = cone.difference(affinity.translate(cone, -6.5, 0))
+    (px, py), (d1x, d1y), (d2x, d2y) = T(104, 12), T(96, 28), T(111, 30)
+    return [fill(d, "#F7A8C4"), fill(poly_d(shade), "#E68AAD"), fill(poly_d(stripes), CREAM), stroke(d, 4.5),
+            f'<circle cx="{f(px)}" cy="{f(py)}" r="4.6" fill="{CREAM}" stroke="{LINE}" stroke-width="3.5"/>',
+            f'<circle cx="{f(d1x)}" cy="{f(d1y)}" r="2.4" fill="#7FB8C8"/><circle cx="{f(d2x)}" cy="{f(d2y)}" r="2.4" fill="#7FB8C8"/>']
 
 
 def bow_body():
-    return [('<g transform="translate(130 42) rotate(-12)">'
-             '<path d="M-3 -1 Q-10 -12 -17 -9 Q-21 -1 -17 7 Q-10 9 -3 2Z" fill="#F27C93" stroke="#3B2A1E" stroke-width="4.5" stroke-linejoin="round"/>'
-             '<path d="M3 -1 Q10 -12 17 -9 Q21 -1 17 7 Q10 9 3 2Z" fill="#F27C93" stroke="#3B2A1E" stroke-width="4.5" stroke-linejoin="round"/>'
-             '<path d="M6 4 Q12 7 16.5 5.5 L17 7 Q10 9 3 2Z" fill="#D95E78"/>'
-             '<path d="M-12 -5 Q-9 -6.5 -6.5 -3 M12 -5 Q9 -6.5 6.5 -3" fill="none" stroke="#3B2A1E" stroke-width="2.2" stroke-linecap="round"/>'
-             '<ellipse cx="0" cy="0.5" rx="5" ry="5.5" fill="#F27C93" stroke="#3B2A1E" stroke-width="4"/>'
-             '<circle cx="-1.6" cy="-1.4" r="1.3" fill="#FFFFFF"/>'
+    k = 1.32                                # a bit bigger so it reads on the big head
+    loop_l = scale_d("M-3 -1 Q-10 -12 -17 -9 Q-21 -1 -17 7 Q-10 9 -3 2Z", k)
+    loop_r = scale_d("M3 -1 Q10 -12 17 -9 Q21 -1 17 7 Q10 9 3 2Z", k)
+    shade = scale_d("M6 4 Q12 7 16.5 5.5 L17 7 Q10 9 3 2Z", k)
+    folds = scale_d("M-12 -5 Q-9 -6.5 -6.5 -3 M12 -5 Q9 -6.5 6.5 -3", k)
+    return [('<g transform="translate(131 39) rotate(-12)">'
+             f'<path d="{loop_l}" fill="#F27C93" stroke="#3B2A1E" stroke-width="4.5" stroke-linejoin="round"/>'
+             f'<path d="{loop_r}" fill="#F27C93" stroke="#3B2A1E" stroke-width="4.5" stroke-linejoin="round"/>'
+             f'<path d="{shade}" fill="#D95E78"/>'
+             f'<path d="{folds}" fill="none" stroke="#3B2A1E" stroke-width="2.5" stroke-linecap="round"/>'
+             f'<ellipse cx="0" cy="0.7" rx="{f(5 * k)}" ry="{f(5.5 * k)}" fill="#F27C93" stroke="#3B2A1E" stroke-width="4"/>'
+             f'<circle cx="{f(-1.6 * k)}" cy="{f(-1.4 * k)}" r="1.6" fill="#FFFFFF"/>'
              '</g>')]
 
 
