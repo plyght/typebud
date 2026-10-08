@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- typebud cat: party hat on the forehead between the ears. Sleep: same drawing in the sleep head transform. -->
+  <g transform="translate(-4 12) rotate(-6 152 80)">
+  <path d="M132 59.5 Q128.5 56.5 130.5 53 L149 33 Q152 30 155 33 L172 52 Q174 55.5 170 57.5 Q151 62.5 132 59.5Z" fill="#F7A8C4"/>
+  <path d="M151 61.5 L170 57.5 L172 52 L155 33 L152 31 L149.5 32.7 L150 33 L167 52 L165 57.5 L147.7 61.1Z" fill="#E68AAD"/>
+  <path d="M141.3 42.1 L135.2 48.6 L163.3 43 L159.2 38.5ZM131.9 56.8 L132.4 59 L140.7 59.9 L170.8 53.9 L171.4 52.1 L169 49.4Z" fill="#FBE3A0"/>
+  <path d="M132 59.5 Q128.5 56.5 130.5 53 L149 33 Q152 30 155 33 L172 52 Q174 55.5 170 57.5 Q151 62.5 132 59.5Z" fill="none" stroke="#3B2A1E" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="152" cy="31" r="4.6" fill="#FBE3A0" stroke="#3B2A1E" stroke-width="3.5"/>
+  <circle cx="142" cy="45" r="1.9" fill="#7FB8C8"/><circle cx="160" cy="48" r="1.9" fill="#7FB8C8"/>
+  </g>
+</svg>
