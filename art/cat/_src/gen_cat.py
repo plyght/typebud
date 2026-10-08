@@ -13,7 +13,7 @@ from pathlib import Path
 
 from shapely import affinity
 from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, Polygon
-from shapely.ops import unary_union
+from shapely.ops import substring, unary_union
 
 OUT = Path(__file__).resolve().parent.parent
 ACC = OUT / "acc"
@@ -216,8 +216,26 @@ HEAD_STRIPES = unary_union([
 
 MUZZLE_D = ("M125 101 C125 92.5 133 89.5 144 90.5 C155 89.5 163 92.5 163 101 C163 108.5 157.5 111 152 110.5 "
             "C148.5 110 145.5 108.5 144 106.5 C142.5 108.5 139.5 110 136 110.5 C130.5 111 125 108.5 125 101Z")
-HEAD_SHADE = HEAD.difference(affinity.translate(HEAD, -6, -6)).intersection(
-    Polygon([(160, 82), (240, 60), (240, 140), (150, 140)]))
+
+
+def head_shade(t0=-30.0, t1=104.0, peak=10.0):
+    """Lower-right crescent (light from the upper left) that tapers to a point at both ends instead
+    of being cut off square: inward offset along the ellipse normal, a smooth bump from t0 to t1."""
+    outer, inner = [], []
+    n = 72
+    for k in range(n + 1):
+        u = k / n
+        th = math.radians(t0 + (t1 - t0) * u)
+        x, y = HX + (HRX + 3) * math.cos(th), HY + (HRY + 3) * math.sin(th)
+        nx, ny = math.cos(th) / HRX, math.sin(th) / HRY
+        L = math.hypot(nx, ny)
+        t = 3 + peak * math.sin(math.pi * u) ** 0.9
+        outer.append((x, y))
+        inner.append((x - nx / L * t, y - ny / L * t))
+    return Polygon(outer + inner[::-1]).buffer(0).intersection(HEAD)
+
+
+HEAD_SHADE = head_shade()
 
 
 def head_layers(eyes="content", mouth="w", perk=False):
@@ -269,10 +287,13 @@ def face(eyes, mouth):
 
 
 # ---------------------------------------------------------------- body + tail
-BODY_D = "M108 112 C91 136 89 178 99 203 Q153 216 207 207 C217 180 219 137 198 110Z"
-BODY = Polygon(cubic((108, 112), (91, 136), (89, 178), (99, 203)) + cubic((207, 207), (217, 180), (219, 137), (198, 110)))
+# the two ends run a few units on into the head (same tangent) so the stroke's closing corner stays
+# hidden under the head instead of nicking the chin outline
+BODY_D = "M113 105 L108 112 C91 136 89 178 99 203 Q153 216 207 207 C217 180 219 137 198 110 L192 102Z"
+BODY = Polygon([(113, 105)] + cubic((108, 112), (91, 136), (89, 178), (99, 203))
+               + cubic((207, 207), (217, 180), (219, 137), (198, 110)) + [(192, 102)])
 BIB_D = "M124 114 C121 138 128 160 146 168 C164 170 178 152 180 116Z"
-BODY_SHADE_D = "M197 122 C209 144 211 176 205 205 L186 205 C195 178 196 150 185 128Z"
+BODY_SHADE_D = "M199 119 C210 142 211 176 205 205 L186 205 C195 178 196 152 190 133 Q191 124 199 119Z"
 BODY_STRIPES = unary_union([
     tapered((222, 132), (199, 129), 4.2, 1.0),
     tapered((222, 150), (201, 148), 4.0, 1.0),
@@ -385,12 +406,41 @@ def paw_shape(c, rot, rx, ry, deco):
     return out
 
 
-def arm(side, curve, head_clip, r0=14.0, r1=12.0, stripe_at=(0.45,), below_kb=False):
+def trim_at_paw(edge, paw, step=0.25):
+    """A contour end that stops next to the paw (instead of running under it) leaves a nub of 5-wide
+    line and round cap poking out of the paw's 4.5 outline, worst on raised paws. Walk in from each
+    free end and drop the line while it is still in the band around the paw outline; stop once it
+    is safely under the paw fill (hidden) or clear of the band."""
+    inner, band = paw.buffer(-0.5), paw.buffer(4.75)
+    out = []
+    for ln in (edge.geoms if hasattr(edge, "geoms") else [edge]):
+        if ln.is_empty or ln.geom_type != "LineString":
+            continue
+        L = ln.length
+        a, b = 0.0, L
+        while a < b and band.contains(ln.interpolate(a)) and not inner.contains(ln.interpolate(a)):
+            a += step
+        while b > a and band.contains(ln.interpolate(b)) and not inner.contains(ln.interpolate(b)):
+            b -= step
+        if b - a > 1.0:
+            out.append(substring(ln, a, b))
+    return unary_union(out) if out else LineString()
+
+
+def arm(side, curve, head_clip, r0=14.0, r1=12.0, stripe_at=(0.45,), below_kb=False, paw=None,
+        body_zone=None):
     poly = tube(curve, r0, r1)
     sx, sy = curve[0]
     root = Point(sx, sy).buffer(r0 + 1.2)
     if head_clip is not None:
-        poly = poly.difference(head_clip.buffer(2.0))
+        # clear the whole outer half of the head outline (5 wide) so the arm never nicks the chin line
+        poly = poly.difference(head_clip.buffer(2.7))
+    inset = None
+    if body_zone is not None:
+        # near the shoulder the arm stays inside the body silhouette, so it never covers the body's
+        # own outline and the shoulder doesn't read as a pasted-on, unoutlined hump
+        inset = BODY.buffer(-2.5)
+        poly = poly.difference(body_zone.difference(inset))
     if below_kb:
         # hug/sip arms melt into the body above the keyboard's back edge, never over the keys
         poly = poly.difference(Polygon([(0, 146 + 0.257 * -80 - 3), (256, 146 + 0.257 * 176 - 3), (256, 256), (0, 256)]))
@@ -407,14 +457,32 @@ def arm(side, curve, head_clip, r0=14.0, r1=12.0, stripe_at=(0.45,), below_kb=Fa
         stripes.append(LineString([(cx - nx * 16 + dx / L * 3, cy - ny * 16 + dy / L * 3),
                                    (cx + nx * 16 - dx / L * 1, cy + ny * 16 - dy / L * 1)]).buffer(2.8))
     stripe = unary_union(stripes).intersection(poly) if stripes else Polygon()
-    shade = poly.difference(affinity.translate(poly, -5, -2))
-    if side == "L":
-        shade = shade.intersection(Point(curve[-1]).buffer(16))
+    # the shade overhangs the arm fill by a hair so the two anti-aliased edges don't leave a light
+    # seam where the arm's flank meets the body shade (no outline covers it at the shoulder)
+    shade = poly.buffer(0.7).difference(affinity.translate(poly, -5, -2))
+    if head_clip is not None:
+        shade = shade.difference(head_clip.buffer(2.7))
+    if inset is not None:
+        shade = shade.intersection(inset)
+    if below_kb:
+        shade = shade.intersection(poly.buffer(0.7, join_style="mitre").difference(
+            Polygon([(0, 146 + 0.257 * -80 - 3), (256, 146 + 0.257 * 176 - 3), (256, 256), (0, 256)])))
     edge = poly.boundary.difference(root)
     if below_kb:
         edge = edge.difference(Polygon([(0, 146 + 0.257 * -80 - 4), (256, 146 + 0.257 * 176 - 4), (256, 256), (0, 256)]))
     if head_clip is not None:
         edge = edge.difference(head_clip.buffer(3.4))
+    if inset is not None:
+        # the clipped side follows the body outline; don't draw a second line along it
+        edge = edge.difference(inset.exterior.buffer(0.6).intersection(body_zone.buffer(1)))
+        parts = edge.geoms if hasattr(edge, "geoms") else [edge]
+        edge = unary_union([ln for ln in parts if ln.length >= 7])
+    if paw is not None:
+        edge = trim_at_paw(edge, paw)
+    if side == "L":
+        shade = shade.intersection(Point(curve[-1]).buffer(16))
+        # keep the shade against a drawn contour; an unoutlined shade wedge reads as a stray patch
+        shade = shade.intersection(edge.buffer(6.5)) if not edge.is_empty else Polygon()
     d = poly_d(poly)
     return [fill(d, MAIN), fill(poly_d(shade), SHADE), fill(poly_d(stripe), DARK), stroke(line_d(edge), 5)]
 
@@ -424,7 +492,7 @@ def paws_layer(lstate, rstate, sleeping=False):
     out = []
     for side, st in (("L", lstate), ("R", rstate)):
         c, rot, rx, ry, deco = paw_state(st, side)
-        out += arm(side, arm_curve(side, c), head)
+        out += arm(side, arm_curve(side, c), head, paw=ellipse_poly(*c, rx, ry, rot))
     for side, st in (("L", lstate), ("R", rstate)):
         c, rot, rx, ry, deco = paw_state(st, side)
         out += paw_shape(c, rot, rx, ry, deco)
@@ -441,8 +509,11 @@ def hug_paws(kind):
         rl, rr = -30, 15
         clip = None
     out = []
-    out += arm("L", arm_curve("L", pl, kind), clip, 13.5, 11.5, stripe_at=(0.4,), below_kb=True)
-    out += arm("R", arm_curve("R", pr, kind), clip, 13.5, 11.5, stripe_at=(0.4,), below_kb=True)
+    for side, p in (("L", pl), ("R", pr)):
+        cur = arm_curve(side, p, kind)
+        # the hugging arms tuck inside the body outline (elbows follow the body's contour)
+        zone = Polygon([(0, 0), (256, 0), (256, 256), (0, 256)])
+        out += arm(side, cur, clip, 13.5, 11.5, stripe_at=(0.4,), below_kb=True, body_zone=zone)
     for c, rot in ((pl, rl), (pr, rr)):
         cx, cy = c
         out.append(f'<ellipse cx="{cx}" cy="{cy}" rx="11.5" ry="9.5" transform="rotate({rot} {cx} {cy})" '
