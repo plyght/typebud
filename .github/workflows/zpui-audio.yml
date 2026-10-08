@@ -1,0 +1,83 @@
+name: zpui audio
+
+# zpui.audio (src/audio in plyght/zpui): the engine's unit tests (null backend:
+# mixing, voice stealing, gain/pan, limiter, resampling, command queue, auto-suspend,
+# activity-monitor policy) and a deterministic offline render of the demo's click
+# pattern to a WAV on macOS, Windows and Linux. Linux additionally cross-compiles the
+# Windows and macOS backends and plays through PulseAudio and PipeWire null sinks.
+
+on:
+  push:
+    paths:
+      - .github/workflows/zpui-audio.yml
+  workflow_dispatch:
+    inputs:
+      zpui_ref:
+        description: plyght/zpui ref (branch, tag or commit) to build
+        required: false
+        default: main
+
+jobs:
+  audio:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: plyght/zpui
+          ref: ${{ inputs.zpui_ref || 'main' }}
+          path: zpui
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      - name: Audio unit tests
+        working-directory: zpui
+        run: zig build audio-test --summary all
+      - name: Offline render (null backend → WAV)
+        working-directory: zpui
+        env:
+          ZPUI_AUDIO_OFFLINE: audio-demo-${{ runner.os }}.wav
+        # Fails (SilentRender) if no clicks were mixed; prints the average callback CPU time.
+        run: zig build audio-demo -Doptimize=ReleaseFast -- --seconds 4
+      - name: Default-device smoke test (best effort; CI runners may have no output device)
+        if: runner.os != 'Linux'
+        continue-on-error: true
+        timeout-minutes: 3
+        working-directory: zpui
+        run: zig build audio-demo -Doptimize=ReleaseFast -- --seconds 1
+      - name: Cross-compile the Windows and macOS backends
+        if: runner.os == 'Linux'
+        working-directory: zpui
+        run: |
+          zig build audio-check -Dtarget=x86_64-windows-gnu --summary all
+          zig build audio-check -Dtarget=aarch64-macos --summary all
+          zig build audio-check -Dtarget=x86_64-macos --summary all
+      - name: PulseAudio and PipeWire null-sink playback
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        timeout-minutes: 5
+        working-directory: zpui
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pulseaudio pulseaudio-utils pipewire pipewire-bin wireplumber dbus dbus-x11
+          zig build audio-check -Doptimize=ReleaseFast
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg"; mkdir -p "$XDG_RUNTIME_DIR"; chmod 700 "$XDG_RUNTIME_DIR"
+          pulseaudio -n --daemonize=yes --exit-idle-time=-1 -L "module-null-sink sink_name=nullsink" -L module-native-protocol-unix
+          sleep 2
+          ./zig-out/bin/audio-demo --backend pulse --seconds 2
+          pulseaudio --kill || true
+          eval "$(dbus-launch --sh-syntax)"
+          pipewire & sleep 1; wireplumber & sleep 2
+          pw-cli create-node adapter '{ factory.name=support.null-audio-sink node.name=nullsink media.class=Audio/Sink object.linger=1 audio.position=[FL FR] }' || true
+          sleep 1
+          ./zig-out/bin/audio-demo --backend pipewire --seconds 2
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zpui-audio-${{ runner.os }}
+          path: zpui/audio-demo-*.wav
+          if-no-files-found: warn

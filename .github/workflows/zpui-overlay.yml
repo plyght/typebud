@@ -1,0 +1,193 @@
+name: zpui overlay
+
+# zpui's desktop-overlay backends (docs/DESKTOP_OVERLAY.md in plyght/zpui) on real runners:
+# the overlay demo smoke test on macOS (Metal) and Linux (X11 via Xvfb, Wayland via weston,
+# both on Vulkan lavapipe), with global key events injected while it runs, plus a probe of
+# whether macOS's permissionless HID key counter sees synthetic key events.
+
+on:
+  push:
+    paths:
+      - .github/workflows/zpui-overlay.yml
+  workflow_dispatch:
+    inputs:
+      zpui_ref:
+        description: plyght/zpui ref (branch, tag or commit) to build
+        required: false
+        default: main
+
+env:
+  LINUX_DEPS: >-
+    libvulkan-dev mesa-vulkan-drivers glslc
+    libwayland-dev wayland-protocols libxkbcommon-dev libxkbcommon-x11-dev
+    libx11-dev libx11-xcb-dev libxcb1-dev libxcb-xkb-dev libxcursor-dev libxi-dev libxrandr-dev libxext-dev
+    libfreetype-dev libharfbuzz-dev libfontconfig-dev fonts-inter fonts-jetbrains-mono fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji
+
+jobs:
+  linux-overlay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: plyght/zpui
+          ref: ${{ inputs.zpui_ref || 'main' }}
+          path: zpui
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      - name: Install Linux dependencies (+ Xvfb, weston, xdotool, ImageMagick)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $LINUX_DEPS xvfb xauth xdotool imagemagick weston
+          echo "VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json" >> "$GITHUB_ENV"
+      - name: Unit tests (desktop helpers, global input decoding, tray, App API)
+        working-directory: zpui
+        run: zig build zpui-test --summary all
+      - name: Build overlay-demo
+        working-directory: zpui
+        run: zig build overlay-demo-build --summary all
+      - name: Overlay demo on X11 (Xvfb + lavapipe), xdotool keys injected
+        working-directory: zpui
+        timeout-minutes: 5
+        run: |
+          mkdir -p zig-out/logs
+          cat > /tmp/x11-run.sh <<'EOF'
+          #!/bin/sh
+          ZPUI_SMOKE_FRAMES=30 ZPUI_SMOKE_INPUT_WAIT_MS=4000 ./zig-out/bin/overlay-demo > zig-out/logs/overlay-x11.log 2>&1 &
+          PID=$!
+          for i in $(seq 1 100); do grep -q "global input monitor" zig-out/logs/overlay-x11.log 2>/dev/null && break; sleep 0.1; done
+          sleep 1.5
+          xdotool key a s d f j k l space Return
+          xdotool click 1
+          sleep 0.5
+          import -window root zig-out/overlay-x11-root.png || true
+          wait $PID
+          echo "exit=$?" >> zig-out/logs/overlay-x11.log
+          EOF
+          chmod +x /tmp/x11-run.sh
+          xvfb-run -a -s "-screen 0 1280x800x24 -nolisten tcp" /tmp/x11-run.sh
+          cat zig-out/logs/overlay-x11.log
+          cp zig-out/overlay-demo.png zig-out/overlay-demo-x11.png
+          grep -q "exit=0" zig-out/logs/overlay-x11.log
+          grep -q "global input events seen: [1-9]" zig-out/logs/overlay-x11.log || echo "::warning::XInput2 saw no injected key events"
+      - name: Overlay demo on Wayland (weston headless, xdg-toplevel fallback)
+        working-directory: zpui
+        timeout-minutes: 5
+        run: |
+          export XDG_RUNTIME_DIR=$(mktemp -d); chmod 700 "$XDG_RUNTIME_DIR"
+          weston --backend=headless --socket=wl-ci --width=1280 --height=800 > zig-out/logs/weston.log 2>&1 &
+          WPID=$!
+          sleep 2
+          set +e
+          env -u DISPLAY WAYLAND_DISPLAY=wl-ci ZPUI_SMOKE_FRAMES=30 ./zig-out/bin/overlay-demo > zig-out/logs/overlay-wayland.log 2>&1
+          code=$?
+          set -e
+          kill $WPID || true
+          cat zig-out/logs/overlay-wayland.log
+          cp zig-out/overlay-demo.png zig-out/overlay-demo-wayland.png
+          exit $code
+      - name: macOS backend still cross-compiles (object only)
+        working-directory: zpui
+        run: |
+          zig build mac-check -Dtarget=aarch64-macos --summary all
+          zig build mac-check -Dtarget=x86_64-macos --summary all
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zpui-overlay-linux
+          path: |
+            zpui/zig-out/*.png
+            zpui/zig-out/logs/
+          if-no-files-found: warn
+
+  macos-overlay:
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: plyght/zpui
+          ref: ${{ inputs.zpui_ref || 'main' }}
+          path: zpui
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      - name: Write the HID counter probe
+        run: |
+          mkdir -p zpui/zig-out/logs
+          cat > /tmp/counter_probe.py <<'EOF'
+          # Does CGEventSourceCounterForEventType (no permission) see synthetic key events?
+          import ctypes, subprocess, sys, time
+          cg = ctypes.cdll.LoadLibrary("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices")
+          cg.CGEventSourceCounterForEventType.restype = ctypes.c_uint32
+          cg.CGEventSourceCounterForEventType.argtypes = [ctypes.c_int32, ctypes.c_uint32]
+          cg.CGEventSourceKeyState.restype = ctypes.c_bool
+          cg.CGEventSourceKeyState.argtypes = [ctypes.c_int32, ctypes.c_uint16]
+          cg.CGEventCreateKeyboardEvent.restype = ctypes.c_void_p
+          cg.CGEventCreateKeyboardEvent.argtypes = [ctypes.c_void_p, ctypes.c_uint16, ctypes.c_bool]
+          cg.CGEventPost.argtypes = [ctypes.c_uint32, ctypes.c_void_p]
+          HID, COMBINED, KEY_DOWN = 1, 0, 10
+          def counts():
+              return cg.CGEventSourceCounterForEventType(HID, KEY_DOWN), cg.CGEventSourceCounterForEventType(COMBINED, KEY_DOWN)
+          def post(n, keep_down=False):
+              for _ in range(n):
+                  cg.CGEventPost(0, cg.CGEventCreateKeyboardEvent(None, 0, True))  # kCGHIDEventTap, kVK_ANSI_A
+                  if not keep_down:
+                      cg.CGEventPost(0, cg.CGEventCreateKeyboardEvent(None, 0, False))
+          mode = sys.argv[1] if len(sys.argv) > 1 else "probe"
+          if mode == "inject":
+              for _ in range(3):
+                  post(4)
+                  time.sleep(0.3)
+              sys.exit(0)
+          a = counts()
+          post(5)
+          time.sleep(0.5)
+          b = counts()
+          post(1, keep_down=True)
+          time.sleep(0.2)
+          held = cg.CGEventSourceKeyState(HID, 0)
+          cg.CGEventPost(0, cg.CGEventCreateKeyboardEvent(None, 0, False))
+          r = subprocess.run(["osascript", "-e", 'tell application "System Events" to keystroke "a"'], capture_output=True, text=True)
+          time.sleep(0.5)
+          c = counts()
+          print(f"CGEventPost x5: HID delta {b[0]-a[0]}, combined delta {b[1]-a[1]}")
+          print(f"CGEventSourceKeyState(HID, kVK_ANSI_A) while a posted key is held: {held}")
+          print(f"osascript keystroke (rc={r.returncode} {r.stderr.strip()}): HID delta {c[0]-b[0]}, combined delta {c[1]-b[1]}")
+          EOF
+      - name: Probe the permissionless key counter (log only)
+        continue-on-error: true
+        run: python3 /tmp/counter_probe.py | tee zpui/zig-out/logs/counter-probe.log
+      - name: Build overlay-demo
+        working-directory: zpui
+        run: zig build overlay-demo-build --summary all
+      - name: Overlay demo smoke (Metal), synthetic keys posted while it runs
+        working-directory: zpui
+        timeout-minutes: 5
+        env:
+          ZPUI_SMOKE_FRAMES: "30"
+          ZPUI_SMOKE_INPUT_WAIT_MS: "4000"
+          ZPUI_ACCESSORY_APP: "1"
+        run: |
+          ./zig-out/bin/overlay-demo > zig-out/logs/overlay-macos.log 2>&1 &
+          PID=$!
+          for i in $(seq 1 100); do grep -q "global input monitor" zig-out/logs/overlay-macos.log 2>/dev/null && break; sleep 0.1; done
+          sleep 1.5
+          python3 /tmp/counter_probe.py inject || true
+          screencapture -x zig-out/overlay-macos-screen.png || true
+          set +e
+          wait $PID
+          code=$?
+          set -e
+          cat zig-out/logs/overlay-macos.log
+          grep -q "global input events seen: [1-9]" zig-out/logs/overlay-macos.log || echo "::warning::the permissionless monitor saw no synthetic key events (see counter-probe.log)"
+          exit $code
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zpui-overlay-macos
+          path: |
+            zpui/zig-out/*.png
+            zpui/zig-out/logs/
+          if-no-files-found: warn
