@@ -1,6 +1,6 @@
 # typebud style guide
 
-Cozy, hand-drawn sticker style: chubby bean animals with thick round dark-brown outlines, flat soft
+Cozy, hand-drawn sticker style: chubby, rounded animals with thick round dark-brown outlines, flat soft
 fills with exactly one shade tone, closed content eyes, tiny mouth, pink blush, and cream
 4-point sparkles. Everything is drawn on the shared 256×256 canvas in [SPEC.md](SPEC.md). Follow
 these rules literally; when in doubt, look at the files in `_shared/` and their preview in
@@ -62,17 +62,18 @@ Fixed colors (write them literally; same in every animal and theme):
 
 ## Proportions and pose
 
-- Chibi: the head is big (≈ 1.0–1.15× the body's width) and slightly wider than tall; the body is a
-  soft bean that leans a touch to the right behind the keyboard.
-- 3/4 view facing the viewer's left: the face sits 8 units left of the head center, the left eye
-  is a little lower and the right eye a little higher (2 units), and the right side of the head
-  (with the near ear / headphone cup) shows more.
-- Forearms are short and chubby (18–24 wide), come from the shoulders, cross the keyboard's back
-  edge and end in small oval paws on the back rows. No fingers; two short toe lines per paw.
+Proportions are each designer's call; give every animal the body that animal should have. What
+keeps the set feeling like one family:
+
+- Chibi-leaning: heads read big and cute; bodies are soft and rounded, never anatomical.
+- A light 3/4 view toward the viewer's left is the default because it shows the keyboard well. A
+  different angle is fine if the animal reads better that way, as long as the paws visibly reach
+  the keys.
+- Limbs that tap the keys are short and chubby. No fingers; at most two short toe lines.
 
 ## Faces
 
-All eye lines are 4.5 wide. Eye centers ≈ (122, 84) and (165, 82) (SPEC "Animal").
+All eye lines are 4.5 wide. Eye positions follow your animal's face.
 
 | State | Eyes |
 |---|---|
@@ -158,7 +159,6 @@ Do:
 - Keep the same outline weight on every animal so they look like one sticker set.
 - Check `idle_96.png` (does the face still read?) and `idle_512.png` (do lines look confident,
   not blocky?) after every change.
-- Reuse coordinates from `_shared/reference_pose*.svg` before inventing new ones.
 
 Don't:
 - No black (`#000000`) lines (except `icon_template.svg`), no pure-white fills on fur.

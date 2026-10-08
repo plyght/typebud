@@ -55,8 +55,17 @@ def recolor(svg: str, cmap: dict) -> str:
     return HEX.sub(lambda m: cmap.get(m.group(0).upper(), m.group(0)), svg)
 
 
-def raster(path: Path, cmap: dict, size: int) -> Image.Image:
+def wrap(svg: str, transform: str) -> str:
+    """Apply a group transform to a whole SVG layer."""
+    start = svg.index(">", svg.index("<svg")) + 1
+    end = svg.rindex("</svg>")
+    return f'{svg[:start]}<g transform="{transform}">{svg[start:end]}</g>{svg[end:]}'
+
+
+def raster(path: Path, cmap: dict, size: int, transform: str | None = None) -> Image.Image:
     svg = recolor(path.read_text(), cmap)
+    if transform:
+        svg = wrap(svg, transform)
     png = cairosvg.svg2png(bytestring=svg.encode(), output_width=size, output_height=size)
     return Image.open(io.BytesIO(png)).convert("RGBA")
 
@@ -65,7 +74,8 @@ def compose(paths, theme: str, fur: dict, size: int = SIZE) -> Image.Image:
     cmap = color_map(theme, fur)
     out = Image.new("RGBA", (size, size), BACKDROPS[theme] + (255,))
     for p in paths:
-        out.alpha_composite(raster(p, cmap, size))
+        p, t = p if isinstance(p, tuple) else (p, None)
+        out.alpha_composite(raster(p, cmap, size, t))
     return out.convert("RGB")
 
 
@@ -83,6 +93,10 @@ class Animal:
             print(f"  {name}: palette.json is per-theme (old format); fur is no longer themed, using 'bright'")
             data = data.get("bright", {})
         self.fur = data
+        anc = self.dir / "anchors.json"
+        self.anchors = json.loads(anc.read_text()) if anc.exists() else {}
+        if not self.anchors and name != "_shared":
+            print(f"  {name}: no anchors.json (see SPEC 'Yours')")
 
     def find(self, rel: str):
         """Path for a layer: the animal's own file, else (for acc/ layers) the shared one."""
@@ -123,11 +137,30 @@ class Animal:
             names.append("acc/zzz")
         return names
 
+    def transform_for(self, name: str, path: Path):
+        """anchors.json placement for shared layers (the animal's own copies are drawn in place)."""
+        if path.parent != SHARED:
+            return None
+        base = name.removeprefix("acc/")
+        if base == "keyboard" or base in DESK:
+            kb = self.anchors.get("keyboard", {})
+            (tx, ty), sc = kb.get("translate", [0, 0]), kb.get("scale", 1.0)
+            if (tx, ty, sc) == (0, 0, 1.0):
+                return None
+            # scale about the keyboard's front-left bottom corner, then move
+            return f"translate({tx} {ty}) translate(30 200) scale({sc}) translate(-30 -200)"
+        off = self.anchors.get("overlays", {}).get(base)
+        return f"translate({off[0]} {off[1]})" if off else None
+
     def stack(self, frame, theme, size=SIZE, **kw):
         paths, missing = [], []
         for n in self.layers(frame, **kw):
             p = self.find(n)
-            (paths.append(p) if p else missing.append(n))
+            if p:
+                t = self.transform_for(n, p)
+                paths.append((p, t) if t else p)
+            else:
+                missing.append(n)
         return compose(paths, theme, self.fur, size), missing
 
 

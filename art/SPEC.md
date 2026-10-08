@@ -1,14 +1,15 @@
 # typebud character art spec
 
 Every animal is a folder `art/<animal>/` of standalone SVG layers that the app stacks on one
-256×256 canvas, swaps between, and lightly transforms (bob, squash, paw offsets). Every animal uses
-the same canvas geometry, layer names and draw order, so animals, accessories and themes can be
-mixed freely. How things are drawn (line weights, eyes, shading) is in [STYLE.md](STYLE.md); shared
-layers live in [`_shared/`](_shared/).
+256×256 canvas, swaps between, and lightly transforms (bob, squash). The **technical contract**
+(canvas, layer names, frame list, draw order, colour tokens) is shared so animals, accessories and
+themes mix freely. The **anatomy is not**: each animal's designer owns its silhouette, proportions,
+posture and where its head and paws sit, and describes them in `anchors.json`. How lines, eyes and
+shading are drawn is in [STYLE.md](STYLE.md); shared gear lives in [`_shared/`](_shared/).
 
-The pose is the same for every animal: a chubby bean-shaped animal in 3/4 view facing slightly to
-the viewer's left, sitting behind a compact 60% keyboard. The keyboard is in front of the body, and
-the forearms come over its back edge so the paws rest on the back rows of keys.
+The scene is the same for every animal: the animal sits (or stands) behind a compact keyboard and
+taps it while you type. Beyond that, draw the animal the way that animal should look: a tall egg
+penguin, a long low capybara, an upright shiba. Don't squeeze it into another animal's shape.
 
 ## Canvas and rendering
 
@@ -17,7 +18,7 @@ the forearms come over its back edge so the paws rest on the back rows of keys.
   read at 96 px and must not look sparse or blocky at 512 px. Line weights in STYLE.md are chosen
   for that range. Keycap legends, blush hatching and toe lines may vanish below ~160 px; nothing
   else may.
-- Everything stays inside the safe box x ∈ [16, 240], y ∈ [24, 240], **strokes included**.
+- Everything stays inside the safe box x ∈ [8, 248], y ∈ [8, 248], **strokes included**.
 - Allowed: `path`, `rect`, `circle`, `ellipse`, `line`, `polyline`, `polygon`, `g`, `defs`,
   `linearGradient`, `radialGradient`, `transform` attributes, `fill-opacity` (sparingly).
   Not allowed: filters, masks, clip paths, `<use>`, `<text>`, `<style>`/CSS, `<image>`, external
@@ -28,106 +29,62 @@ the forearms come over its back edge so the paws rest on the back rows of keys.
 - Gradient ids must be unique per file and prefixed with the file's purpose (`kb-underglow`,
   `hp-ring`) because the app may inline several layers.
 
-## Canvas geometry (shared by every animal)
+## Geometry: what's shared, what's yours
 
-All numbers are viewBox units. `art/_shared/reference_pose.svg` + `reference_pose_paws.svg` show
-them as a placeholder animal with magenta guides; line your animal up with it.
+### Shared defaults (`_shared/`)
 
-### Desk and keyboard (fixed: everyone uses `_shared/keyboard.svg`)
+`_shared/keyboard.svg` is drawn at a default placement (desk line y = 236; case top corners
+front-left (30,188), front-right (170,224), back-right (220,182), back-left (80,146); back edge
+y = 146 + 0.257·(x − 80); key grid K(s,t) = (37.4,185.9) + s·(8.84,2.27) + t·(8.74,−7.34)).
+`scripts/gen_keyboard.py` generates it. `_shared/reference_pose*.svg` is one example of an animal
+fitted to that default. It is **only an example**; don't copy its bean shape.
 
-| Thing | Value |
+The shared head items (`headphones`), held items, desk props and overlays are drawn for that
+example. Every animal ships its own fitted copies in `acc/`.
+
+### Yours (`anchors.json`)
+
+Each animal has `art/<animal>/anchors.json`. The app and `scripts/render_art.py` read it, so the
+art can sit anywhere in the canvas:
+
+```json
+{
+  "keyboard": { "translate": [0, 0], "scale": 1.0 },
+  "overlays": {
+    "music_notes": [0, 0],
+    "zzz": [0, 0],
+    "motion": [0, 0]
+  },
+  "paws": { "left": [122, 168], "right": [160, 180] },
+  "head": { "cx": 152, "cy": 80, "rx": 58, "ry": 48 }
+}
+```
+
+| Field | Meaning |
 |---|---|
-| Desk line (lowest point of the keyboard) | y = 236 |
-| Keyboard case top face, corners | front-left (30,188), front-right (170,224), back-right (220,182), back-left (80,146) |
-| Case thickness (front + right faces drop straight down) | 12 → bottom corners (30,200), (170,236), (220,194) |
-| Board tilt | front edge rises 14.4° to the left; depth axis points up-right |
-| Back edge line | y = 146 + 0.257·(x − 80) (e.g. y = 164 at x = 150) |
-| Key grid → canvas | K(s, t) = (37.4, 185.9) + s·(8.84, 2.27) + t·(8.74, −7.34); s = key units from the left (0…15), t = rows from the front (0…5) |
-| Rows (front → back) | space row, Shift row, Caps row, Tab row, number row |
-| Rainbow underglow | band in the lower half of the front and right faces, fixed gradient |
+| `keyboard` | Transform applied to the shared keyboard (and the desk props) for this animal: `translate(x y) scale(s)` about the keyboard's front-left bottom corner (30,200). Use it to make the board smaller/larger or move it so your animal's paws land naturally. Optional; default identity. |
+| `overlays.*` | Offset of each shared overlay from its default position (`music_notes` top right, `zzz` top left, `motion` around the default paws). Optional. You may instead ship your own `acc/music_notes.svg` etc. |
+| `paws.left/right` | Rest points of your paws on the keys (the app uses them for small key-press effects). Required. |
+| `head` | Ellipse of your head (the app uses it for future effects and the settings preview crop). Required. |
 
-`scripts/gen_keyboard.py` generates the keyboard from these numbers.
+Everything else is free: head size and position, body shape, how far the animal leans over the
+keyboard, how the paws reach the keys, where held items sit, how the head moves when asleep. Rules
+that still apply:
 
-### Animal
-
-| Thing | Value |
-|---|---|
-| Head center H | (152, 80), may move ±4 in x and y |
-| Head radius | rx 54–62, ry 44–52 (head shape, cheeks included). Ears/tufts may rise to y = 24. |
-| Face center | x = H.x − 8 (3/4 view facing left). Eye line ≈ H.y + 3; eyes ≈ x 122 and x 165 (40–46 apart, the right one ~2 higher) |
-| Blush centers | ≈ (110, 99) and (177, 97) |
-| Mouth | ≈ (144, 100) |
-| Body | bean, widest x 98–212; its top hides under the head (~y 110); bottom runs behind the keyboard to y ≥ 200 |
-| Shoulders (forearms start here) | L (122, 136), R (182, 144) |
-| Shade side | right flank and under the head/forearms (light from the upper left) |
-
-"L" and "R" always mean the viewer's left and right.
-
-### Paws (in `<frame>_paws.svg`, drawn after the keyboard)
-
-Each paws layer contains both forearms and both paws. Forearms run from the shoulder over the
-keyboard's back edge; the paws sit on the back rows (row 3–4, around the F and J keys).
-
-| State | L paw center | R paw center | Notes |
-|---|---|---|---|
-| rest (`idle`, `peek`, `sleep`, `wake`) | (122, 168) | (160, 180) | paw ellipse rx 12–14, ry 8.5–10, rotated 14° with the board |
-| pressed | rest + (0, 3) | rest + (0, 3) | squash: ry × 0.85, a tiny bit wider |
-| raised | rest + (2, −10) | rest + (2, −10) | rotate ~0°, forearm still crosses the back edge |
-| `type_left` | pressed | raised | |
-| `type_right` | raised | pressed | |
-| `type_both` | pressed | pressed | |
-| `excited` | rest + (0, −12) | rest + (0, −12) | `_shared/motion.svg` is added on top |
-| hug (`hold`) | (148, 152) | (182, 146) | paws wrap the lower front of the held item (`reference_hold_paws.svg`) |
-| `sip` | ≈ (136, 128) | ≈ (170, 122) | follow the raised item; adjust to your item position |
-
-With the keyboard turned off, the same paws read as resting on the desk; draw nothing extra.
-
-### Held items (`acc/hold_<item>.svg`)
-
-Held items are hugged with **both** paws in front of the chest, never carried in one paw. Each
-shared item is drawn around (0,0) inside one `<g transform="translate(…) rotate(…)">`, so moving it
-means editing only that transform.
-
-| Frame | Item anchor | Tilt |
-|---|---|---|
-| `hold` | translate(164, 140) | coffee/boba 10°, book −8° |
-| `sip` | ≈ translate(146, 114) | ≈ −25° (rim/straw touching the mouth); fine-tune per animal |
-
-The item must stay entirely above the keyboard's back edge (bottom ≤ y 164 at x 164). It may overlap
-the chin and lower cheek, like holding a cup up close.
-
-### Sleep / wake head
-
-The head (and everything on it) moves by (−4, +12) and rotates −6° about H, i.e.
-`transform="translate(-4 12) rotate(-6 152 80)"` → sleeping head center ≈ (148, 92). The body does
-not move. `acc/<item>_sleep.svg` use exactly the same transform, so a head item and its sleep variant
-are the same drawing in a different group transform.
-
-### Headphones convention
-
-Shared base: `_shared/headphones.svg` (fitted to H = (152,80), rx 58, ry 48). Each animal copies it
-to `acc/headphones.svg` and refits it to its own head:
-
-- Near cup (screen right) covers the ear on the head's right edge: outer cap center
-  ≈ (H.x + rx, H.y + 7), cap rx 13, ry 22; a cushion ellipse 10 units to its left; rainbow ring on
-  the cap face (fixed gradient) with `hp_glow` inside.
-- Far cup (screen left) shows only as a crescent outside the head outline, from H.y − 17 to H.y + 21.
-- Band: centerline 10–14 units above the skull top, drawn as an outlined stroke (14 wide
-  `gear_line` under 6.5 wide `hp_band`), ending in the tops of the two cups. For animals with ears on
-  top (cat, shiba), the band sits between/behind the ears: draw the ears in the frame and leave a
-  gap in the band where an ear would be in front of it, or route the band behind the ears.
-
-### Decor zones (shared layers; keep animal art out of these where possible)
-
-| Layer | Zone |
-|---|---|
-| `desk_lamp` | left, x 22–92, y 58–166 (base on the desk behind the keyboard's left end) |
-| `desk_plant` | right, x 201–239, y 108–183 |
-| `desk_mug` | front right on the desk, x 199–238, y 180–236 |
-| `sparkles` | (26, 218), (233, 97), (72, 32) |
-| `music_notes` | top right, x 205–240, y 24–70 |
-| `zzz` | top left, x 34–90, y 24–70 (in front of the sleeping face) |
-| `motion` | short dashes around the two paw rest points |
+- Everything stays inside the safe box (below) with strokes included, at the keyboard transform
+  you chose.
+- Layers line up between frames: the body doesn't jump from frame to frame unless the motion is
+  intentional (sleep slump, excited bounce).
+- The paws/flippers in `<frame>_paws.svg` are drawn **over** the keyboard, so they must visibly
+  sit on (or hover just above) keys. With the keyboard turned off they must still read as resting
+  on the desk.
+- Held items are hugged in front of the chest (`hold`) and raised to the mouth (`sip`), never in
+  front of the keyboard's keys.
+- Head items: ship fitted `acc/<item>.svg` + `acc/<item>_sleep.svg` for every head item, following
+  your own head in both poses.
+- Prefer keeping the right side clear of the plant/mug props and the top corners clear for the
+  overlays, but if your animal's silhouette needs the space, move the props via your own
+  `acc/desk_*.svg` copies rather than cramping the animal.
 
 ## Frames (final list; file names are fixed)
 

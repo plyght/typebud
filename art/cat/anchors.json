@@ -1,0 +1,6 @@
+{
+  "keyboard": { "translate": [0, 0], "scale": 1.0 },
+  "overlays": {},
+  "paws": { "left": [122, 168], "right": [160, 180] },
+  "head": { "cx": 152, "cy": 82, "rx": 60, "ry": 47 }
+}
