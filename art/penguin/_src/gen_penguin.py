@@ -12,6 +12,7 @@ at build time; the SVGs are plain paths.
 import json
 import math
 import re
+import sys
 from pathlib import Path
 
 from shapely import affinity
@@ -52,9 +53,14 @@ def kb_pt(x, y):
     return (30 + (x - 30) * KB_S + KB_T[0], 200 + (y - 200) * KB_S + KB_T[1])
 
 
+sys.path.insert(0, str(OUT.parent.parent / "scripts"))
+from gen_keyboard import P as kb_grid  # noqa: E402  (the shared key grid, key units -> default viewBox)
+
+
 def key(s, t):
-    """Shared key grid K(s,t) (SPEC) mapped through this animal's keyboard transform."""
-    return kb_pt(37.4 + s * 8.84 + t * 8.74, 185.9 + s * 2.27 - t * 7.34)
+    """Shared key grid (scripts/gen_keyboard.py, s from the left key edge, t from the front key
+    edge as the typist sees it) mapped through this animal's keyboard transform."""
+    return kb_pt(*kb_grid(s, t))
 
 
 KB_BACK = [kb_pt(80, 146), kb_pt(220, 182)]       # back edge of the case
@@ -226,7 +232,8 @@ def body_layers(w=None, hop=False):
     sheen = inner.difference(affinity.translate(inner, 6, 7)).intersection(W(box(0, 0, 150, 96), ww))
     sheen = sheen.buffer(-0.6).buffer(0.6)
     # shade on the white: right side of the belly + a soft chin shadow under the face lobes
-    wsh = face.difference(affinity.translate(face, -7, -2)).intersection(box(150, 0, 256, 256))
+    # (sideways shift only: no strip along the bottom of the belly, which now shows under the board)
+    wsh = face.difference(affinity.translate(face, -7, 0)).intersection(box(150, 0, 256, 256)).buffer(-0.5).buffer(0.5)
     chin = W(Polygon(cubic((104, 126), (122, 138), (156, 140), (178, 122), 24)
                      + cubic((178, 128), (156, 146), (122, 146), (104, 132), 24)), ww).intersection(face)
     sd = poly_d(sil)
@@ -237,7 +244,8 @@ def body_layers(w=None, hop=False):
 # tuft: two little feathers curling up from the crown, drawn behind the egg
 TUFTS = {
     "rest": [[(137, 42), (134, 30), (128, 23), (122, 22)], [(144, 42), (147, 31), (153, 25), (159, 26)]],
-    "perk": [[(137, 42), (134, 28), (130, 19), (125, 15)], [(144, 42), (148, 29), (154, 21), (160, 19)]],
+    # perked up from the same roots (identical below y 30, where the headphone band crosses them)
+    "perk": [[(137, 42), (134, 30), (128.6, 21.2), (124, 14)], [(144, 42), (147, 31), (153.4, 23.2), (160, 19)]],
 }
 
 
@@ -337,7 +345,7 @@ def face_layers(eyes, mouth, w=None, hop=False):
 
 # ---------------------------------------------------------------- flippers
 SHOULDER = {"L": (84, 146), "R": (200, 163)}
-REST = {"L": key(1.2, 4.3), "R": key(13.2, 4.1)}
+REST = {"L": key(1.2, 4.2), "R": key(12.7, 4.2)}   # back rows, clear of the case rim
 
 
 def flipper_shape(root, tip, bow, rmax=14.0, rtip=6.5):
@@ -433,11 +441,13 @@ def flip_tip(side, state):
 
 
 def key_touch(tip, state):
-    """Tiny contact squish under a pressed flipper tip."""
+    """Tiny contact squish under a pressed flipper tip: a short arc hugging the tip's outline, so it
+    stays on the key surface (and reads as a flattened tip with the keyboard off)."""
     if state != "pressed":
         return []
     x, y = tip
-    return [stroke(f"M{f(x - 6)} {f(y + 7.5)} Q{f(x)} {f(y + 9.5)} {f(x + 6)} {f(y + 7.5)}", 2.5)]
+    arc = [(x + 7.6 * math.cos(math.radians(a)), y + 7.6 * math.sin(math.radians(a))) for a in range(45, 136, 9)]
+    return [stroke(pts_d(arc), 2.5)]
 
 
 def paws_layer(ls, rs, sleeping=False):
@@ -521,22 +531,99 @@ def hp_ring_defs(y0, y1, gid="hp-ring"):
             f'{s}</linearGradient></defs>')
 
 
+def ring_arc(ring, p0, p1, via_top=True):
+    """The stretch of a closed ring between the points nearest p0 and p1, the way round that passes
+    over the top (smallest y), as a list of points from p0 to p1."""
+    ln = LineString(ring.coords)
+    L = ln.length
+    a, b = ln.project(Point(p0)), ln.project(Point(p1))
+    lo, hi = min(a, b), max(a, b)
+    inner = substring(ln, lo, hi)
+    outer = unary_union([substring(ln, hi, L), substring(ln, 0, lo)])
+    outer = shapely.line_merge(outer) if outer.geom_type == "MultiLineString" else outer
+    pick = inner if (min(y for _, y in inner.coords) < min(y for _, y in outer.coords)) == via_top else outer
+    pts = list(pick.coords)
+    if Point(pts[0]).distance(Point(p0)) > Point(pts[-1]).distance(Point(p0)):
+        pts = pts[::-1]
+    return pts
+
+
 def headphones(w):
-    band_c = cubic((84, 90), (78, 22), (206, 16), (203, 88), 80)
-    band = W(LineString(band_c), w)
-    outer = band.buffer(7, cap_style="round")
-    inner = band.buffer(3.25, cap_style="round")
-    hl = W(LineString(cubic((100, 50), (114, 34), (140, 28), (166, 31), 30)), w).buffer(1.25).intersection(inner.buffer(-0.3))
-    far = W(Polygon(cubic((88, 72), (72, 70), (68, 86), (69, 96)) + cubic((69, 96), (70, 108), (78, 116), (90, 113))
-                    + cubic((90, 113), (84, 104), (83, 84), (88, 72))), w)
-    cush = W(ellipse_poly(201, 98, 11, 22), w)
-    cap = W(ellipse_poly(211, 99, 13, 22), w)
-    ring = W(ellipse_poly(213, 99, 6.5, 14), w)
-    dot = W(ellipse_poly(214, 99, 3, 8.5), w)
+    """Band hugging the crown from the near cup over the top, swinging just outside the far side of
+    the egg to the far cup; the far cup sits behind the head (only a crescent outside the outline,
+    head outline redrawn over it); the tuft's roots grow up in front of the band."""
+    # band centreline: the egg outline offset from 2 inside (crown, near side) to 4.5 outside where
+    # it reaches the far cup, so it leaves the head before it gets there instead of cutting across
+    edge = ring_arc(SIL.exterior, (204, 86), (79, 76))
+    sil_ring = SIL.exterior
+    cen = []
+    n = len(edge)
+    for i, (x, y) in enumerate(edge):
+        t = i / (n - 1)
+        q0 = edge[max(i - 1, 0)]
+        q1 = edge[min(i + 1, n - 1)]
+        tx, ty = q1[0] - q0[0], q1[1] - q0[1]
+        L = math.hypot(tx, ty) or 1
+        nx, ny = ty / L, -tx / L                       # outward normal (ring runs clockwise on screen)
+        if Point(x + nx, y + ny).within(SIL):
+            nx, ny = -nx, -ny
+        k = min(max((y - 40) / 40, 0), 1) if x < 130 else 0.0
+        k = k * k * (3 - 2 * k)
+        off = -2.0 + 9.0 * k
+        cen.append((x + nx * off, y + ny * off))
+    # last bit drops straight into the far cup
+    cen.append((cen[-1][0] + 0.3, cen[-1][1] + 6))
+    m = len(cen)
+    taper = lambda t, r0, r1: r0 + (r1 - r0) * min(max((t - 0.6) / 0.4, 0), 1)
+    outer = vtube(cen, lambda t: taper(t, 7.0, 5.2))
+    inner = vtube(cen, lambda t: taper(t, 3.25, 2.1))
+    hl_pts = cen[int(m * 0.18):int(m * 0.52)]
+    hl = vtube([(x, y - 1.2) for x, y in hl_pts], lambda t: 1.25).intersection(inner.buffer(-0.4))
+    far = Polygon(cubic((88, 72), (71, 69), (66, 86), (67, 96)) + cubic((67, 96), (68, 109), (77, 117), (90, 113))
+                  + cubic((90, 113), (84, 104), (83, 84), (88, 72)))
+    far_vis = far.difference(SIL)
+    cush = ellipse_poly(201, 98, 11, 22)
+    cap = ellipse_poly(211, 99, 13, 22)
+    ring = ellipse_poly(213, 99, 6.5, 14)
+    dot = ellipse_poly(214, 99, 3, 8.5)
+    # tuft roots in front of the band (the two tuft poses agree to within a pixel below the band's
+    # top edge, so one overlay fits both)
+    tufts = unary_union([vtube(catmull(pp, 8), lambda t: 4.6 - 2.4 * t) for pp in TUFTS["rest"]])
+    t_fill = tufts.intersection(outer)
+    # where the root is inside the egg it takes the crown's colours, so it grows out of the head
+    c_in = SIL.buffer(-5.5)
+    t_sheen = t_fill.intersection(c_in.difference(affinity.translate(c_in, 6, 7)).intersection(box(0, 0, 150, 96))
+                                  .buffer(-0.6).buffer(0.6))
+    t_line = tufts.exterior if tufts.geom_type == "Polygon" else unary_union([g.exterior for g in tufts.geoms])
+    t_line = t_line.intersection(outer.buffer(0.3))
+    # on the far side, where the band swings off the head, the head outline runs in front of it;
+    # it starts inside the band's dark inner edge, so it reads as that edge turning into the outline
+    zone = unary_union([outer.buffer(0.5).intersection(box(0, 44, 128, 256)).difference(inner.buffer(0.6)),
+                        far.buffer(3)])
+    far_line = sil_ring.intersection(zone)
+    far_line = shapely.line_merge(far_line) if far_line.geom_type == "MultiLineString" else far_line
+    shapes = []
+    for ln in (far_line.geoms if hasattr(far_line, "geoms") else [far_line]):
+        pts = list(ln.coords)
+        if pts[0][1] > pts[-1][1]:
+            pts = pts[::-1]
+        L = ln.length
+        dense = [ln.interpolate(L * i / max(int(L / 0.8), 2)) for i in range(max(int(L / 0.8), 2) + 1)]
+        dense = [(q.x, q.y) for q in dense]
+        if dense[0][1] > dense[-1][1]:
+            dense = dense[::-1]
+        # thin where it comes out of the band, full outline width after ~9 units
+        taper_in = Point(dense[0]).within(outer)
+        shapes.append(vtube(dense, (lambda t, L=L: 0.7 + 1.8 * min(t * L / 9, 1)) if taper_in else (lambda t: 2.5)))
+    far_line = unary_union(shapes)
+    far_vis, far_line, outer, inner, hl, cush, cap, ring, dot, t_fill, t_sheen, t_line = (
+        W(g, w) for g in (far_vis, far_line, outer, inner, hl, cush, cap, ring, dot, t_fill, t_sheen, t_line))
     y0, y1 = ring.bounds[1], ring.bounds[3]
+    fd = poly_d(far_vis)
     return [hp_ring_defs(y0, y1), "<g>",
-            outlined(poly_d(far), HP_SH, 4.5, G_LINE),
             fill(poly_d(outer), G_LINE), fill(poly_d(inner), HP_BAND), fill(poly_d(hl), HP_CUP),
+            outlined(fd, HP_SH, 4.5, G_LINE), fill(poly_d(far_line), LINE),
+            fill(poly_d(t_fill), MAIN), fill(poly_d(t_sheen), SHEEN), stroke(line_d(t_line), 4.5),
             outlined(poly_d(cush), HP_SH, 4.5, G_LINE), outlined(poly_d(cap), HP_CUP, 4.5, G_LINE),
             f'<path d="{poly_d(ring)}" fill="{HP_GLOW}" stroke="url(#hp-ring)" stroke-width="3.5"/>',
             fill(poly_d(dot), HP_CUP), "</g>"]
@@ -603,7 +690,8 @@ def glasses(w):
     bridge = W(LineString(cubic((128, 88), (132, 83), (136, 82), (140, 86), 10)), w)
     # temple arm runs back to the head outline and stops on it (round cap tucked into the line)
     arm = W(LineString([(166, 87), (202, 82)]).intersection(SIL.buffer(-2.5)), w)
-    farm = W(LineString([(102, 90), (86, 89)]), w)
+    # far arm runs back to the far side of the head outline too and goes behind it there
+    farm = W(LineString([(102, 90), (70, 88.5)]).intersection(SIL.buffer(-2.5)), w)
     return ["<g>",
             f'<circle cx="{f(lx)}" cy="{f(ly)}" r="{r - 1}" fill="#FFFFFF" fill-opacity="0.3"/>',
             f'<circle cx="{f(rx)}" cy="{f(ry)}" r="{r}" fill="#FFFFFF" fill-opacity="0.3"/>',
