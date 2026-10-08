@@ -1,0 +1,12 @@
+.{
+    .name = .typebud_updater,
+    .version = "0.1.0",
+    .fingerprint = 0x2fbd3b8e5163bdb2,
+    .minimum_zig_version = "0.17.0",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "tools",
+    },
+}
