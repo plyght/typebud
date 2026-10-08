@@ -28,7 +28,10 @@ GAP = 0.10                # half gap between keys (key units)
 CAP_RISE = 3.0            # how far a keycap top sits above its footprint (viewBox units)
 CAP_FRONT = 0.16          # key units of front lip left visible below the cap top
 
-ROW_LAYOUT = [            # front (space row) to back (number row)
+# The keyboard faces the animal (who sits behind it), so from the viewer the space row is at the
+# BACK and every row runs right-to-left. Layouts/legends below are written from the typist's side
+# (space row first, left to right) and flipped in main().
+ROW_LAYOUT = [            # typist's near row (space) to far row (number row)
     [1.25, 1.25, 1.25, 6.25, 1.25, 1.25, 1.25, 1.25],
     [2.25] + [1] * 10 + [2.75],
     [1.75] + [1] * 11 + [2.25],
@@ -112,7 +115,10 @@ def main():
     rim = poly([case(0.02, 0.0), case(0.98, 0.0), case(0.98, 0.05), case(0.02, 0.05)])
 
     skirts, tops, legends = [], [], []
-    for row, widths in enumerate(ROW_LAYOUT):
+    for trow, twidths in enumerate(ROW_LAYOUT):
+        # viewer row 0 (front) is the typist's far row; viewer left-to-right is typist right-to-left
+        row = len(ROW_LAYOUT) - 1 - trow
+        widths = list(reversed(twidths))
         s = 0.0
         t0, t1 = row + GAP, row + 1 - GAP
         for i, w in enumerate(widths):
@@ -123,11 +129,12 @@ def main():
             ti = 0.06
             tops.append(rounded([P(s0 + ti, t0 + CAP_FRONT, -CAP_RISE), P(s1 - ti, t0 + CAP_FRONT, -CAP_RISE),
                                  P(s1 - ti, t1 - 0.02, -CAP_RISE), P(s0 + ti, t1 - 0.02, -CAP_RISE)], 1.4))
-            label = LEGENDS[row][i]
+            ti_ = len(widths) - 1 - i          # index in the typist's left-to-right order
+            label = LEGENDS[trow][ti_]
             if label:
                 # centre of the keycap top face; the glyph's x axis runs along U, its "up" along V
                 cx, cy = P((s0 + s1) / 2, (t0 + CAP_FRONT + t1 - 0.02) / 2, -CAP_RISE)
-                legends.append({"row": row, "index": i, "label": label,
+                legends.append({"row": trow, "index": ti_, "label": label,
                                 "center": [round(cx, 2), round(cy, 2)],
                                 "em": LEGEND_EM_CHAR if len(label) == 1 else LEGEND_EM_WORD,
                                 "width": w})
@@ -161,12 +168,13 @@ def main():
     OUT.write_text(out)
     KEYS_OUT.write_text(json.dumps({
         "about": "Keycap legends for _shared/keyboard.svg, drawn with assets/fonts/Nunito-ExtraBold.ttf. "
-                 "A glyph's x axis maps to `u` and its up axis to `v` (viewBox units per key unit), "
+                 "A glyph's x axis maps to `u` and its up axis to `v` (viewBox units per key unit; they point toward the animal's right and toward the viewer, since the board faces the animal), "
                  "centred on `center`, font size `em` key units, colour token keycap_legend. "
                  "Apply the animal's anchors.json keyboard transform on top.",
         "font": "assets/fonts/Nunito-ExtraBold.ttf",
-        "u": [round(U[0], 4), round(U[1], 4)],
-        "v": [round(V[0], 4), round(V[1], 4)],
+        # glyph axes: the legends read upright for the animal, i.e. rotated 180 degrees for the viewer
+        "u": [round(-U[0], 4), round(-U[1], 4)],
+        "v": [round(-V[0], 4), round(-V[1], 4)],
         "color_token": "keycap_legend",
         "os_overrides": {os_: {str(r): labels for r, labels in rows.items()} for os_, rows in LEGENDS_OS.items()},
         "keys": legends,
