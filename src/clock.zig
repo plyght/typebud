@@ -26,3 +26,9 @@ pub fn cpuNs() u64 {
     const i = getIo() orelse return 0;
     return @intCast(@max(std.Io.Clock.cpu_process.now(i).nanoseconds, 0));
 }
+
+/// Wall-clock time (Unix epoch), nanoseconds.
+pub fn realNs() i128 {
+    const i = getIo() orelse return 0;
+    return std.Io.Clock.real.now(i).nanoseconds;
+}

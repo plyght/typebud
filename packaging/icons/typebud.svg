@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<defs><linearGradient id="tile-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF4E2"/><stop offset="1" stop-color="#FFDDE6"/></linearGradient></defs>
+<rect x="100" y="100" width="824" height="824" rx="186" fill="url(#tile-bg)" stroke="#3B2A1E" stroke-opacity="0.12" stroke-width="6"/>
+<g transform="matrix(2.6 0 0 2.6 179 179)">
+  <!-- typebud cat icon: front face only, outline 16, eyes 18; reads at 16 px. -->
+  <path d="M37 127.4 Q34 130 34.2 126L38.9 52 Q40 34 55.3 43.4L98.6 69.9 Q102 72 99 74.6Z" fill="#F4A257" stroke="#3B2A1E" stroke-width="16" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M157 74.6 Q154 72 157.4 69.9L200.7 43.4 Q216 34 217.1 52L221.8 126 Q222 130 219 127.4Z" fill="#F4A257" stroke="#3B2A1E" stroke-width="16" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M58.4 110.2 Q56 112 55.8 109L52.8 72 Q52 62 60.5 67.3L87.5 84.4 Q90 86 87.6 87.8Z" fill="#F28F98"/>
+  <path d="M168.4 87.8 Q166 86 168.5 84.4L195.5 67.3 Q204 62 203.2 72L200.2 109 Q200 112 197.6 110.2Z" fill="#F28F98"/>
+  <path d="M28 146 A100 80 0 1 1 228 146 A100 80 0 1 1 28 146Z" fill="#F4A257"/>
+  <path d="M118.1 66.4 L125.2 101 L125.7 102 L126.7 102.7 L127.8 103 L129 102.8 L130.1 102.1 L130.9 100.8 L137.9 66.4 L128 66ZM90.8 71.7 L104 97.5 L104.8 98.2 L105.7 98.5 L106.6 98.4 L107.5 98 L108.2 97.1 L108.5 96 L107.1 67.8 L99 69.4ZM148.9 67.8 L147.5 96.3 L147.8 97.2 L148.5 98 L149.4 98.4 L150.3 98.5 L151.4 98.1 L152.2 97.2 L165.2 71.7 L157 69.4Z" fill="#CF6B2C"/>
+  <path d="M108.1 164.1 L103.8 164.6 L100.1 165.6 L96.7 167 L93.6 168.9 L91 171 L88.8 173.5 L87.3 176.2 L86.3 179.1 L86 182 L86.3 184.9 L87.3 187.8 L88.8 190.5 L91 193 L93 194.7 L96 196.6 L99.4 198.1 L103 199.2 L106.9 199.8 L110.8 200 L114.7 199.7 L118.5 198.8 L122 197.6 L125.2 195.9 L128 193.9 L130.8 195.9 L133.3 197.3 L136.1 198.4 L139 199.2 L142.1 199.8 L145.2 200 L148.4 199.9 L151.4 199.5 L154.5 198.8 L157.3 197.9 L160 196.6 L162.4 195.1 L164.6 193.4 L166.4 191.5 L167.9 189.4 L169.2 186.7 L169.7 184.9 L170 182.6 L169.9 180.2 L169.5 178.5 L168.7 176.2 L167.9 174.6 L166.4 172.5 L165 171 L161.8 168.5 L160 167.4 L157.3 166.1 L153 164.8 L147.9 164.1 L146.3 162.2 L144.1 160.4 L142 159.2 L139 157.9 L134.4 156.6 L130.2 156.1 L125.8 156.1 L121.6 156.6 L117.6 157.7 L114 159.2 L111 161.1 L109.3 162.6Z" fill="#FFEBCB"/>
+  <ellipse cx="62" cy="180" rx="16" ry="10" fill="#F4A6A0"/>
+  <ellipse cx="194" cy="180" rx="16" ry="10" fill="#F4A6A0"/>
+  <path d="M28 146 A100 80 0 1 1 228 146 A100 80 0 1 1 28 146Z" fill="none" stroke="#3B2A1E" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M66 146 Q80 150 94 146 M162 146 Q176 150 190 146" fill="none" stroke="#3B2A1E" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M108 180 Q118 192 128 182 Q138 192 148 180" fill="none" stroke="#3B2A1E" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M116 160 Q128 156 140 160 Q137 170 128 172 Q119 170 116 160Z" fill="#F28F98" stroke="#3B2A1E" stroke-width="8" stroke-linejoin="round"/>
+</g></svg>

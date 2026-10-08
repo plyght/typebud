@@ -77,6 +77,10 @@ pub fn main(init: std.process.Init) !void {
         if (std.mem.eql(u8, a, "--smoke")) mode = .smoke else if (std.mem.eql(u8, a, "--demo")) mode = .demo else if (std.mem.eql(u8, a, "--settings")) open_settings = true else if (std.mem.eql(u8, a, "--version")) {
             std.debug.print("typebud {s}\n", .{@import("build_options").version});
             return;
+        } else if (std.mem.eql(u8, a, "--write-icons")) {
+            const dir = args.next() orelse "packaging/icons";
+            try @import("icons.zig").writeAll(gpa, init.io, dir);
+            return;
         } else if (std.mem.startsWith(u8, a, "--typebud-updated-from=")) {} else {
             std.debug.print("usage: typebud [--settings] [--smoke] [--demo] [--version]\n", .{});
             std.process.exit(2);

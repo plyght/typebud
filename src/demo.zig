@@ -30,6 +30,7 @@ const State = struct {
     marks: std.ArrayList(Mark) = .empty,
     recorder: ?sound.Recorder = null,
     start_ns: u64 = 0,
+    start_unix_ns: i128 = 0,
     // animated drags
     anim_step: u32 = 0,
     anim_from: f32 = 0,
@@ -99,6 +100,7 @@ fn sLaunch(tb: *Typebud) void {
     s.sleep_after = 0;
     tb.launch();
     st.start_ns = tb.now();
+    st.start_unix_ns = @import("clock.zig").realNs();
     if (tb.player.audio != null) {
         st.recorder = .{ .gpa = tb.gpa, .clock = nowCb, .clock_ctx = tb };
         tb.player.recorder = &st.recorder.?;
@@ -382,7 +384,10 @@ fn done(tb: *Typebud) void {
 fn writeTimeline(tb: *Typebud, total: f64) !void {
     var out: std.ArrayList(u8) = .empty;
     defer out.deinit(tb.gpa);
-    try out.print(tb.gpa, "{{\n  \"duration\": {d:.2},\n  \"features\": [\n", .{total});
+    // start_unix: wall clock at t = 0 (and at the first audio.wav sample), so a recording
+    // started earlier can be aligned and trimmed.
+    const unix_s = @as(f64, @floatFromInt(st.start_unix_ns)) / std.time.ns_per_s;
+    try out.print(tb.gpa, "{{\n  \"start_unix\": {d:.3},\n  \"duration\": {d:.2},\n  \"features\": [\n", .{ unix_s, total });
     for (st.marks.items, 0..) |m, i| {
         try out.print(tb.gpa, "    {{ \"feature\": \"{s}\", \"start\": {d:.2}, \"end\": {d:.2} }}{s}\n", .{ m.name, m.start, m.end, if (i + 1 < st.marks.items.len) "," else "" });
     }
