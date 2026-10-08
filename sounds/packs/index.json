@@ -37,10 +37,6 @@
     {
       "id": "bubble-pop",
       "bundle": "default"
-    },
-    {
-      "id": "model-m",
-      "bundle": "optional-gpl"
     }
   ]
 }

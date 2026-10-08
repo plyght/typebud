@@ -37,7 +37,7 @@ sounds/packs/
   "format_version": 1,
   "packs": [
     { "id": "nk-cream", "bundle": "default" },
-    { "id": "model-m",  "bundle": "optional-gpl" }
+    { "id": "holy-panda", "bundle": "default" }
   ]
 }
 ```
@@ -220,7 +220,6 @@ implementation of steps 1–3.
 | nk-cream, holy-panda, mx-brown, box-navy, alps-blue, buckling-spring, topre | generic 5, space 1, enter 1, backspace 1 | generic 1, space 1, enter 1, backspace 1 |
 | low-profile-brown | generic 5, space 3, enter 2, backspace 2 | same |
 | bubble-pop | generic 8, space 2, enter 1, backspace 1, modifier 2 | generic 4, space 1 |
-| model-m (optional-gpl) | generic 12, digit 3, space 1, enter 1, backspace 1, tab 1, modifier 4, arrow 2 | same |
 
 The kbsim-derived packs have no distinct modifier/tab/arrow recordings. Those
 keys use `generic` through rule 1.
