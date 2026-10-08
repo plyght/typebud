@@ -13,7 +13,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-pub const zpui_commit = "d2074cd04a456fa109b9f2a7acf5926a0ab32e7d";
+pub const zpui_commit = "a42a212ab1c72fdaef7860bc9d1be1d332c71886";
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});

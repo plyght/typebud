@@ -158,7 +158,7 @@ pub const Typebud = struct {
         self.user_visible = if (self.settings.remember_visible) self.settings.visible else true;
         self.keys = legends.Keys.parse(self.keys_arena.allocator(), assets.get("art/_shared/keyboard_keys.json") orelse "{}", legends.os_name) catch .{};
         app.addFont(assets.get("assets/fonts/Nunito-ExtraBold.ttf").?) catch |e| std.log.warn("legend font: {t}", .{e});
-        self.font_id = app.textSystem().resolveFont(.{ .family = "Nunito ExtraLight" }) catch null;
+        self.font_id = app.textSystem().resolveFont(.{ .family = "Nunito" }) catch null;
         self.library.loadBundled();
         self.library.loadFolder(io, self.userPackDir() catch "");
         return self;

@@ -1,0 +1,168 @@
+name: Demo video
+
+# Records `typebud --demo` (a ~1 minute scripted feature tour with captions) on each
+# platform and muxes in the typing-sound track the app writes to zig-out/demo/audio.wav
+# (runners have no sound device). zig-out/demo/timeline.json has the feature list with
+# start / end seconds and `start_unix`, the wall-clock time of t = 0 (the first audio
+# sample), used to align and trim the screen recording.
+
+on:
+  workflow_dispatch:
+
+env:
+  ZIG_VERSION: 0.17.0
+  LINUX_DEPS: >-
+    libvulkan-dev mesa-vulkan-drivers glslc
+    libwayland-dev wayland-protocols libxkbcommon-dev libxkbcommon-x11-dev
+    libx11-dev libx11-xcb-dev libxcb1-dev libxcb-xkb-dev libxcursor-dev libxi-dev libxrandr-dev libxext-dev
+    libfreetype-dev libharfbuzz-dev libfontconfig-dev fonts-inter fonts-noto-core fonts-noto-color-emoji
+
+jobs:
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: zpui (pinned)
+        run: scripts/fetch-zpui.sh
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: Install ffmpeg
+        run: brew install ffmpeg
+      - name: Build (ReleaseFast)
+        run: zig build -Doptimize=ReleaseFast --summary all
+      - name: Find the screen capture device
+        id: dev
+        run: |
+          ffmpeg -hide_banner -f avfoundation -list_devices true -i "" 2>&1 | tee devices.txt || true
+          idx=$(sed -n 's/.*\[\([0-9]*\)\] Capture screen 0.*/\1/p' devices.txt | head -1)
+          echo "index=${idx:-1}" >> "$GITHUB_OUTPUT"
+      - name: Record the demo
+        timeout-minutes: 6
+        env:
+          ZPUI_ACCESSORY_APP: "1"
+        run: |
+          set -x
+          mkdir -p rec
+          python3 -c 'import time; print(f"{time.time():.3f}")' > rec/start_unix
+          ffmpeg -hide_banner -loglevel warning -f avfoundation -capture_cursor 1 -framerate 30 \
+            -i "${{ steps.dev.outputs.index }}:none" -c:v libx264 -preset ultrafast -crf 18 -pix_fmt yuv420p rec/raw.mkv &
+          FF=$!
+          sleep 3
+          if ! kill -0 $FF 2>/dev/null || [ ! -s rec/raw.mkv ]; then
+            echo "::warning::ffmpeg avfoundation capture is blocked; falling back to screencapture -v"
+            kill $FF 2>/dev/null || true
+            rm -f rec/raw.mkv
+            python3 -c 'import time; print(f"{time.time():.3f}")' > rec/start_unix
+            screencapture -v -V 80 -x rec/raw.mov &
+            FF=$!
+            sleep 2
+          fi
+          ./zig-out/bin/typebud --demo 2>&1 | tee rec/demo.log
+          sleep 1
+          kill -INT $FF 2>/dev/null || true
+          wait $FF || true
+          ls -la rec zig-out/demo
+      - name: Mux, trim and encode
+        run: scripts/demo-encode.sh rec typebud-demo-macos.mp4
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: typebud-demo-macos.mp4
+          path: |
+            typebud-demo-macos.mp4
+            zig-out/demo/timeline.json
+            rec/demo.log
+          if-no-files-found: warn
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: zpui (pinned)
+        run: scripts/fetch-zpui.sh
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: Install dependencies (Xvfb, compositor, wallpaper, ffmpeg)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $LINUX_DEPS xvfb xauth xcompmgr hsetroot imagemagick ffmpeg
+      - name: Build (ReleaseFast)
+        run: zig build -Doptimize=ReleaseFast --summary all
+      - name: Record the demo (Xvfb 1920x1080 + xcompmgr, x11grab)
+        timeout-minutes: 6
+        env:
+          VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.json
+        run: |
+          mkdir -p rec
+          convert -size 1920x1080 gradient:'#6a8caf'-'#c9a7c7' rec/wallpaper.png
+          Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp &
+          XV=$!
+          export DISPLAY=:99
+          sleep 2
+          hsetroot -fill rec/wallpaper.png
+          xcompmgr &
+          sleep 1
+          python3 -c 'import time; print(f"{time.time():.3f}")' > rec/start_unix
+          ffmpeg -hide_banner -loglevel warning -f x11grab -draw_mouse 0 -framerate 30 -video_size 1920x1080 -i :99 \
+            -c:v libx264 -preset ultrafast -crf 18 -pix_fmt yuv420p rec/raw.mkv &
+          FF=$!
+          ./zig-out/bin/typebud --demo 2>&1 | tee rec/demo.log
+          sleep 1
+          kill -INT $FF; wait $FF || true
+          kill $XV || true
+      - name: Mux, trim and encode
+        run: scripts/demo-encode.sh rec typebud-demo-linux.mp4
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: typebud-demo-linux.mp4
+          path: |
+            typebud-demo-linux.mp4
+            zig-out/demo/timeline.json
+            rec/demo.log
+          if-no-files-found: warn
+
+  windows:
+    runs-on: windows-latest
+    # zpui's Windows backend is not on main yet.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: zpui (pinned)
+        shell: bash
+        run: scripts/fetch-zpui.sh
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: Install ffmpeg
+        run: choco install ffmpeg -y --no-progress
+      - name: Build (ReleaseFast)
+        run: zig build -Doptimize=ReleaseFast --summary all
+      - name: Record the demo (gdigrab)
+        shell: bash
+        timeout-minutes: 6
+        run: |
+          mkdir -p rec
+          python -c 'import time; print(f"{time.time():.3f}")' > rec/start_unix
+          ffmpeg -hide_banner -loglevel warning -f gdigrab -framerate 30 -i desktop \
+            -c:v libx264 -preset ultrafast -crf 18 -pix_fmt yuv420p rec/raw.mkv &
+          FF=$!
+          ./zig-out/bin/typebud.exe --demo 2>&1 | tee rec/demo.log
+          sleep 1
+          # ffmpeg has no window to close on Windows: stop it hard (Matroska stays readable).
+          taskkill //F //IM ffmpeg.exe || true
+          wait $FF || true
+      - name: Mux, trim and encode
+        shell: bash
+        run: scripts/demo-encode.sh rec typebud-demo-windows.mp4
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: typebud-demo-windows.mp4
+          path: |
+            typebud-demo-windows.mp4
+            zig-out/demo/timeline.json
+            rec/demo.log
+          if-no-files-found: warn

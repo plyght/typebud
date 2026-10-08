@@ -1,0 +1,156 @@
+name: App
+
+# Builds typebud, runs its unit tests and the scripted smoke test (`typebud --smoke`:
+# pet + settings windows, synthetic typing, idle-frame check, screenshots of the pet
+# states, every animal × vibe, each animal's frames and every settings section), packages
+# it, and uploads the screenshots and packages as artifacts.
+#
+# zpui is checked out at the commit pinned in build.zig (`zpui_commit`) by
+# scripts/fetch-zpui.sh into ./zpui (a path dependency in build.zig.zon).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - src/**
+      - build.zig
+      - build.zig.zon
+      - art/**
+      - sounds/**
+      - assets/**
+
+concurrency:
+  group: app-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ZIG_VERSION: 0.17.0
+  LINUX_DEPS: >-
+    libvulkan-dev mesa-vulkan-drivers glslc
+    libwayland-dev wayland-protocols libxkbcommon-dev libxkbcommon-x11-dev
+    libx11-dev libx11-xcb-dev libxcb1-dev libxcb-xkb-dev libxcursor-dev libxi-dev libxrandr-dev libxext-dev
+    libfreetype-dev libharfbuzz-dev libfontconfig-dev fonts-inter fonts-noto-core fonts-noto-color-emoji
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: zpui (pinned)
+        run: scripts/fetch-zpui.sh
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: Install dependencies (+ Xvfb, ImageMagick)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $LINUX_DEPS xvfb xauth imagemagick
+          echo "VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json" >> "$GITHUB_ENV"
+      - name: Unit tests
+        run: zig build test --summary all
+      - name: Build
+        run: zig build --summary all
+      - name: Smoke test (Xvfb + lavapipe)
+        timeout-minutes: 5
+        run: |
+          set +e
+          xvfb-run -a -s "-screen 0 1440x900x24 -nolisten tcp" ./zig-out/bin/typebud --smoke 2>&1 | tee smoke.log
+          code=${PIPESTATUS[0]}
+          set -e
+          cat zig-out/smoke/report.txt || true
+          exit $code
+      - name: Package (tarball + AppDir)
+        run: zig build package -Doptimize=ReleaseFast --prefix out/pkg --summary all
+      - name: Cross-compile checks (macOS object, Windows compile)
+        run: |
+          zig build check -Dtarget=aarch64-macos --summary all
+          zig build check -Dtarget=x86_64-windows-gnu --summary all || echo "::warning::Windows link needs zpui's Windows backend (vulkan-1); compile-only for now"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: typebud-linux
+          path: |
+            zig-out/smoke/
+            smoke.log
+            out/pkg/*.tar.gz
+          if-no-files-found: warn
+
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-26]
+    runs-on: ${{ matrix.os }}
+    # macos-26 runners may not be available to every account yet.
+    continue-on-error: ${{ matrix.os == 'macos-26' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: zpui (pinned)
+        run: scripts/fetch-zpui.sh
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: Unit tests
+        run: zig build test --summary all
+      - name: Build
+        run: zig build --summary all
+      - name: Smoke test (Metal)
+        timeout-minutes: 5
+        env:
+          ZPUI_ACCESSORY_APP: "1"
+        run: |
+          set +e
+          ./zig-out/bin/typebud --smoke 2>&1 | tee smoke.log
+          code=${PIPESTATUS[0]}
+          set -e
+          cat zig-out/smoke/report.txt || true
+          exit $code
+      - name: Package Typebud.app (universal)
+        run: |
+          zig build package -Doptimize=ReleaseFast -Duniversal=true --prefix out/pkg --summary all
+          plutil -lint out/pkg/Typebud.app/Contents/Info.plist
+          lipo -info out/pkg/Typebud.app/Contents/MacOS/typebud
+          plutil -extract LSUIElement raw out/pkg/Typebud.app/Contents/Info.plist
+          ditto -c -k --keepParent out/pkg/Typebud.app out/pkg/Typebud-macos-universal.zip
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: typebud-${{ matrix.os }}
+          path: |
+            zig-out/smoke/
+            smoke.log
+            out/pkg/*.zip
+          if-no-files-found: warn
+
+  windows:
+    runs-on: windows-latest
+    # zpui's Windows backend is not on main yet: build and smoke are expected to fail.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: zpui (pinned)
+        shell: bash
+        run: scripts/fetch-zpui.sh
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: Unit tests
+        run: zig build test --summary all
+      - name: Build
+        run: zig build --summary all
+      - name: Smoke test
+        shell: bash
+        timeout-minutes: 5
+        run: ./zig-out/bin/typebud.exe --smoke 2>&1 | tee smoke.log
+      - name: Package
+        run: zig build package -Doptimize=ReleaseFast --prefix out/pkg --summary all
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: typebud-windows
+          path: |
+            zig-out/smoke/
+            smoke.log
+            out/pkg/
+          if-no-files-found: warn
