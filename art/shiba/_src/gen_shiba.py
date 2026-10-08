@@ -726,18 +726,17 @@ def build_icons():
             fill(poly_d(nose.buffer(3)), LINE),
             '<ellipse cx="119" cy="180" rx="6" ry="3.5" transform="rotate(-10 119 180)" fill="#FFFFFF"/>']
     write(OUT / "icon.svg", body, "typebud shiba icon: front face only, outline 16, eyes 18; reads at 16 px.")
-    # template: black silhouette; inner ears, eyes, brow dots and the cream urajiro cut out;
-    # the nose and the smile stay as black islands inside the cream
+    # template: black silhouette; inner ears, eyes and the cream urajiro cut out; the nose stays as
+    # a black island. Brow dots and the smile blur into the eyes and the nose at 16 px, so they are
+    # left out here.
     outer = sil.buffer(8, join_style="round")
     eyes = unary_union([LineString(cubic((68, ey), (79, ey + 2.7), (91, ey + 2.7), (102, ey), 12)).buffer(9),
                         LineString(cubic((154, ey), (165, ey + 2.7), (177, ey + 2.7), (188, ey), 12)).buffer(9)])
-    holes = unary_union([eyes, brows, ilp.buffer(-2), irp.buffer(-2), mask.intersection(head.buffer(-15))])
-    mouth = unary_union([LineString(cubic((96, 204), (102, 216), (116, 220), (128, 202), 12)).buffer(4.5),
-                         LineString(cubic((160, 204), (154, 216), (140, 220), (128, 202), 12)).buffer(4.5)])
-    tmpl = outer.difference(holes).union(nose.buffer(4)).union(mouth)
+    holes = unary_union([eyes, ilp.buffer(-2), irp.buffer(-2), mask.intersection(head.buffer(-15))])
+    tmpl = outer.difference(holes).union(nose.buffer(7))
     write(OUT / "icon_template.svg", [f'<path d="{poly_d(tmpl)}" fill="#000000" fill-rule="evenodd"/>'],
-          "typebud shiba icon template: black silhouette; inner ears, eyes, brow dots and the cream urajiro cut "
-          "out, nose and smile left as islands (even-odd).")
+          "typebud shiba icon template: black silhouette; inner ears, eyes and the cream urajiro cut out, "
+          "nose left as an island (even-odd).")
 
 
 ANCHORS = {

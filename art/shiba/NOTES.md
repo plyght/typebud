@@ -29,8 +29,8 @@ is centred at (148, 86), rx 70, ry 48. The keyboard sits 6 units lower than the 
   at `translate(152 146)`, just above the keyboard's back edge).
 - `sip`: happy closed eyes, item raised to the muzzle (`acc/sip_*`: `translate(135 124) rotate(-20)`).
 - `icon` / `icon_template`: dedicated front face with tall ears, cheek tufts, brow dots, cream mask
-  and big nose. The template cuts out the eyes, brow dots, inner ears and the whole cream mask, and
-  leaves the nose and smile as islands, so at 16 px it reads as a shiba, not a cat.
+  and big nose. The template cuts out the eyes, the inner ears and the whole cream mask and leaves the
+  nose as an island, so at 16 px it reads as a shiba (white lower face, dark nose), not a cat.
 
 Accessories (`acc/`, each with a `_sleep` twin in the sleep transform): `headphones` with the band
 running behind both tall ears; `beanie` (a dusty-blue knit with two pointed ear pockets, so the
