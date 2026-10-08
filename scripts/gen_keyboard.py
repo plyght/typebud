@@ -6,9 +6,11 @@ transform: P(s, t) = origin + s*u + t*v, with s in key units along the board (le
 t in rows from the front edge (0) to the back edge. Re-run after changing the numbers below.
 usage: scripts/gen_keyboard.py
 """
+import json
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent.parent / "art" / "_shared" / "keyboard.svg"
+KEYS_OUT = OUT.with_name("keyboard_keys.json")
 
 # Case top face corners (see SPEC "Canvas geometry").
 FL = (30.0, 188.0)        # front-left
@@ -24,6 +26,7 @@ U = ((FR[0] - FL[0]) / SPAN_S, (FR[1] - FL[1]) / SPAN_S)
 V = ((BL[0] - FL[0]) / SPAN_T, (BL[1] - FL[1]) / SPAN_T)
 GAP = 0.10                # half gap between keys (key units)
 CAP_RISE = 3.0            # how far a keycap top sits above its footprint (viewBox units)
+CAP_FRONT = 0.16          # key units of front lip left visible below the cap top
 
 ROW_LAYOUT = [            # front (space row) to back (number row)
     [1.25, 1.25, 1.25, 6.25, 1.25, 1.25, 1.25, 1.25],
@@ -33,7 +36,22 @@ ROW_LAYOUT = [            # front (space row) to back (number row)
     [1] * 13 + [2],
 ]
 
-LINE_MAIN, LINE_KEY, LINE_LEGEND = 4.5, 2.0, 1.6
+# Keycap legends, front (space row) to back (number row). They are drawn with a real font at
+# runtime (assets/fonts), not in the SVG. Per-OS overrides for the modifier row.
+LEGENDS = [
+    ["ctrl", "win", "alt", "", "alt", "fn", "menu", "ctrl"],
+    ["shift", "Z", "X", "C", "V", "B", "N", "M", ",", ".", "/", "shift"],
+    ["caps", "A", "S", "D", "F", "G", "H", "J", "K", "L", ";", "'", "enter"],
+    ["tab", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "[", "]", "\\"],
+    ["`", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "delete"],
+]
+LEGENDS_OS = {
+    "macos": {0: ["ctrl", "opt", "cmd", "", "cmd", "opt", "fn", "ctrl"]},
+    "linux": {0: ["ctrl", "super", "alt", "", "alt", "fn", "menu", "ctrl"]},
+}
+LEGEND_EM_CHAR, LEGEND_EM_WORD = 0.34, 0.20   # font size in key units (1-char keys, word keys)
+
+LINE_MAIN, LINE_KEY = 4.5, 2.0
 # theme token placeholders (art/_shared/themes.json)
 GEAR_LINE, KB_CASE, KB_CASE_HI, KB_SIDE, KB_SIDE_DARK = "#22252C", "#3A3F4B", "#4A505E", "#262A33", "#1E2129"
 KEYCAP, KEYCAP_SIDE, KEYCAP_LEGEND = "#454B59", "#2C313B", "#B8C0CC"
@@ -99,27 +117,20 @@ def main():
         t0, t1 = row + GAP, row + 1 - GAP
         for i, w in enumerate(widths):
             s0, s1 = s + GAP, s + w - GAP
-            skirts.append(rounded([P(s0, t0), P(s1, t0), P(s1, t1), P(s0, t1)], 1.2))
-            ti = 0.10
-            tops.append(rounded([P(s0 + ti, t0 + 0.26, -CAP_RISE), P(s1 - ti, t0 + 0.26, -CAP_RISE),
-                                 P(s1 - ti, t1 - 0.04, -CAP_RISE), P(s0 + ti, t1 - 0.04, -CAP_RISE)], 1.0))
-            cs, ct = (s0 + s1) / 2, (t0 + t1) / 2 + 0.12
-            if w == 1:
-                # alternate tiny glyph strokes so the board reads as "legends", not a grid of dots
-                k = (row * 7 + i * 3) % 4
-                if k == 0:
-                    a, b = P(cs - 0.18, ct, -CAP_RISE), P(cs + 0.18, ct, -CAP_RISE)
-                elif k == 1:
-                    a, b = P(cs, ct - 0.18, -CAP_RISE), P(cs, ct + 0.18, -CAP_RISE)
-                elif k == 2:
-                    a, b = P(cs - 0.14, ct - 0.14, -CAP_RISE), P(cs + 0.14, ct + 0.14, -CAP_RISE)
-                else:
-                    a = b = P(cs, ct, -CAP_RISE)
-                legends.append(f"M{f(a)} L{f(b)}")
-            elif row in (1, 2, 3) or (row == 4 and i == len(widths) - 1):
-                # modifier keys: a short stroke near the outer edge
-                a, b = P(s0 + 0.35, ct, -CAP_RISE), P(s0 + 0.85, ct, -CAP_RISE)
-                legends.append(f"M{f(a)} L{f(b)}")
+            # keycap body: from the footprint's front edge up to the raised top's back edge, so only a
+            # thin front lip shows under each cap top
+            skirts.append(rounded([P(s0, t0), P(s1, t0), P(s1, t1, -CAP_RISE), P(s0, t1, -CAP_RISE)], 1.4))
+            ti = 0.06
+            tops.append(rounded([P(s0 + ti, t0 + CAP_FRONT, -CAP_RISE), P(s1 - ti, t0 + CAP_FRONT, -CAP_RISE),
+                                 P(s1 - ti, t1 - 0.02, -CAP_RISE), P(s0 + ti, t1 - 0.02, -CAP_RISE)], 1.4))
+            label = LEGENDS[row][i]
+            if label:
+                # centre of the keycap top face; the glyph's x axis runs along U, its "up" along V
+                cx, cy = P((s0 + s1) / 2, (t0 + CAP_FRONT + t1 - 0.02) / 2, -CAP_RISE)
+                legends.append({"row": row, "index": i, "label": label,
+                                "center": [round(cx, 2), round(cy, 2)],
+                                "em": LEGEND_EM_CHAR if len(label) == 1 else LEGEND_EM_WORD,
+                                "width": w})
             s += w
 
     gx0, gx1 = FL[0], BR[0]
@@ -142,13 +153,24 @@ def main():
   <path d="{glow}" fill="url(#kb-underglow)"/>
   <path d="{top}" fill="{KB_CASE}" stroke="{GEAR_LINE}" stroke-width="{LINE_KEY}" stroke-linejoin="round"/>
   <path d="{rim}" fill="{KB_CASE_HI}"/>
-  <path d="{''.join(skirts)}" fill="{KEYCAP_SIDE}" stroke="{GEAR_LINE}" stroke-width="{LINE_KEY}" stroke-linejoin="round"/>
+  <path d="{''.join(skirts)}" fill="{KEYCAP_SIDE}" stroke="{KB_SIDE}" stroke-width="1.2" stroke-linejoin="round"/>
   <path d="{''.join(tops)}" fill="{KEYCAP}"/>
-  <path d="{''.join(legends)}" fill="none" stroke="{KEYCAP_LEGEND}" stroke-width="{LINE_LEGEND}" stroke-linecap="round"/>
   <path d="{silhouette}" fill="none" stroke="{GEAR_LINE}" stroke-width="{LINE_MAIN}" stroke-linejoin="round"/>
 </svg>
 '''
     OUT.write_text(out)
+    KEYS_OUT.write_text(json.dumps({
+        "about": "Keycap legends for _shared/keyboard.svg, drawn with assets/fonts/Nunito-ExtraBold.ttf. "
+                 "A glyph's x axis maps to `u` and its up axis to `v` (viewBox units per key unit), "
+                 "centred on `center`, font size `em` key units, colour token keycap_legend. "
+                 "Apply the animal's anchors.json keyboard transform on top.",
+        "font": "assets/fonts/Nunito-ExtraBold.ttf",
+        "u": [round(U[0], 4), round(U[1], 4)],
+        "v": [round(V[0], 4), round(V[1], 4)],
+        "color_token": "keycap_legend",
+        "os_overrides": {os_: {str(r): labels for r, labels in rows.items()} for os_, rows in LEGENDS_OS.items()},
+        "keys": legends,
+    }, indent=1) + "\n")
     print(f"wrote {OUT} (BR={f(BR)}, bottom-right={f(BRb)}, front-right-bottom={f(FRb)})")
 
 

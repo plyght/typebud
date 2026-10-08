@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 import cairosvg
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent / "art"
 SHARED = ROOT / "_shared"
@@ -74,9 +74,68 @@ def compose(paths, theme: str, fur: dict, size: int = SIZE) -> Image.Image:
     cmap = color_map(theme, fur)
     out = Image.new("RGBA", (size, size), BACKDROPS[theme] + (255,))
     for p in paths:
+        if isinstance(p, tuple) and p[0] == "LEGENDS":
+            out.alpha_composite(legends(size, theme, p[1]))
+            continue
         p, t = p if isinstance(p, tuple) else (p, None)
         out.alpha_composite(raster(p, cmap, size, t))
     return out.convert("RGB")
+
+
+KEYS = json.loads((SHARED / "keyboard_keys.json").read_text())
+FONT_PATH = ROOT.parent / KEYS["font"]
+
+
+def legends(size: int, theme: str, kb=(0.0, 0.0, 1.0), os_name: str = "default") -> Image.Image:
+    """Keycap legends, rasterized by FreeType with the keyboard's affine transform applied to the glyph
+    outlines (FT_Set_Transform), the same way the app's text system does it: no bitmap stretching."""
+    import freetype
+
+    tx, ty, sc = kb
+    color = THEME_FILE["themes"][theme]["keycap_legend"]
+    rgb = tuple(int(color[i:i + 2], 16) for i in (1, 3, 5))
+    k = size / 256
+    (ux, uy), (vx, vy) = KEYS["u"], KEYS["v"]
+    overrides = KEYS["os_overrides"].get(os_name, {})
+    face = freetype.Face(str(FONT_PATH))
+    nominal = 64
+    face.set_char_size(nominal * 64)
+    flags = freetype.FT_LOAD_RENDER | freetype.FT_LOAD_NO_HINTING
+    out = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    solid = Image.new("RGBA", (size, size), rgb + (255,))
+    for key in KEYS["keys"]:
+        text = key["label"]
+        row_over = overrides.get(str(key["row"]))
+        if row_over:
+            text = row_over[key["index"]]
+        if not text:
+            continue
+        # glyph x -> u, glyph up -> v; FreeType device space is y-up, so negate the y components
+        f = key["em"] * sc * k * 1.35 / nominal
+        m = freetype.Matrix(int(f * ux * 65536), int(f * vx * 65536), int(-f * uy * 65536), int(-f * vy * 65536))
+        face.set_transform(m, freetype.Vector(0, 0))
+        pen_x = pen_y = 0.0   # device pixels, y down
+        pieces = []
+        for ch in text:
+            face.load_char(ch, flags)
+            g = face.glyph
+            bm = g.bitmap
+            if bm.width and bm.rows:
+                img = Image.frombytes("L", (bm.width, bm.rows), bytes(bm.buffer))
+                pieces.append((img, pen_x + g.bitmap_left, pen_y - g.bitmap_top))
+            pen_x += g.advance.x / 64
+            pen_y -= g.advance.y / 64
+        if not pieces:
+            continue
+        x0 = min(px for _, px, _ in pieces); y0 = min(py for _, _, py in pieces)
+        x1 = max(px + im.width for im, px, _ in pieces); y1 = max(py + im.height for im, _, py in pieces)
+        cx, cy = key["center"]
+        cx, cy = (30 + (cx - 30) * sc + tx) * k, (200 + (cy - 200) * sc + ty) * k
+        mask = Image.new("L", (size, size), 0)
+        for im, px, py in pieces:
+            mask.paste(im, (round(cx - (x0 + x1) / 2 + px), round(cy - (y0 + y1) / 2 + py)), im)
+        out.paste(solid, (0, 0), mask)
+    return out
 
 
 def label(draw, x, y, text):
@@ -159,6 +218,9 @@ class Animal:
             if p:
                 t = self.transform_for(n, p)
                 paths.append((p, t) if t else p)
+                if n == "acc/keyboard" and p.parent == SHARED:
+                    kb = self.anchors.get("keyboard", {})
+                    paths.append(("LEGENDS", (*kb.get("translate", [0, 0]), kb.get("scale", 1.0))))
             else:
                 missing.append(n)
         return compose(paths, theme, self.fur, size), missing

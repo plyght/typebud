@@ -1,0 +1,701 @@
+{
+ "about": "Keycap legends for _shared/keyboard.svg, drawn with assets/fonts/Nunito-ExtraBold.ttf. A glyph's x axis maps to `u` and its up axis to `v` (viewBox units per key unit), centred on `center`, font size `em` key units, colour token keycap_legend. Apply the animal's anchors.json keyboard transform on top.",
+ "font": "assets/fonts/Nunito-ExtraBold.ttf",
+ "u": [
+  8.8384,
+  2.2727
+ ],
+ "v": [
+  8.7413,
+  -7.3427
+ ],
+ "color_token": "keycap_legend",
+ "os_overrides": {
+  "macos": {
+   "0": [
+    "ctrl",
+    "opt",
+    "cmd",
+    "",
+    "cmd",
+    "opt",
+    "fn",
+    "ctrl"
+   ]
+  },
+  "linux": {
+   "0": [
+    "ctrl",
+    "super",
+    "alt",
+    "",
+    "alt",
+    "fn",
+    "menu",
+    "ctrl"
+   ]
+  }
+ },
+ "keys": [
+  {
+   "row": 0,
+   "index": 0,
+   "label": "ctrl",
+   "center": [
+    47.89,
+    180.11
+   ],
+   "em": 0.2,
+   "width": 1.25
+  },
+  {
+   "row": 0,
+   "index": 1,
+   "label": "win",
+   "center": [
+    58.94,
+    182.95
+   ],
+   "em": 0.2,
+   "width": 1.25
+  },
+  {
+   "row": 0,
+   "index": 2,
+   "label": "alt",
+   "center": [
+    69.99,
+    185.79
+   ],
+   "em": 0.2,
+   "width": 1.25
+  },
+  {
+   "row": 0,
+   "index": 4,
+   "label": "alt",
+   "center": [
+    136.27,
+    202.83
+   ],
+   "em": 0.2,
+   "width": 1.25
+  },
+  {
+   "row": 0,
+   "index": 5,
+   "label": "fn",
+   "center": [
+    147.32,
+    205.67
+   ],
+   "em": 0.2,
+   "width": 1.25
+  },
+  {
+   "row": 0,
+   "index": 6,
+   "label": "menu",
+   "center": [
+    158.37,
+    208.51
+   ],
+   "em": 0.2,
+   "width": 1.25
+  },
+  {
+   "row": 0,
+   "index": 7,
+   "label": "ctrl",
+   "center": [
+    169.42,
+    211.36
+   ],
+   "em": 0.2,
+   "width": 1.25
+  },
+  {
+   "row": 1,
+   "index": 0,
+   "label": "shift",
+   "center": [
+    61.05,
+    173.9
+   ],
+   "em": 0.2,
+   "width": 2.25
+  },
+  {
+   "row": 1,
+   "index": 1,
+   "label": "Z",
+   "center": [
+    75.41,
+    177.59
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 1,
+   "index": 2,
+   "label": "X",
+   "center": [
+    84.25,
+    179.87
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 1,
+   "index": 3,
+   "label": "C",
+   "center": [
+    93.09,
+    182.14
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 1,
+   "index": 4,
+   "label": "V",
+   "center": [
+    101.93,
+    184.41
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 1,
+   "index": 5,
+   "label": "B",
+   "center": [
+    110.77,
+    186.68
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 1,
+   "index": 6,
+   "label": "N",
+   "center": [
+    119.6,
+    188.96
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 1,
+   "index": 7,
+   "label": "M",
+   "center": [
+    128.44,
+    191.23
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 1,
+   "index": 8,
+   "label": ",",
+   "center": [
+    137.28,
+    193.5
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 1,
+   "index": 9,
+   "label": ".",
+   "center": [
+    146.12,
+    195.77
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 1,
+   "index": 10,
+   "label": "/",
+   "center": [
+    154.96,
+    198.05
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 1,
+   "index": 11,
+   "label": "shift",
+   "center": [
+    171.53,
+    202.31
+   ],
+   "em": 0.2,
+   "width": 2.75
+  },
+  {
+   "row": 2,
+   "index": 0,
+   "label": "caps",
+   "center": [
+    67.58,
+    165.99
+   ],
+   "em": 0.2,
+   "width": 1.75
+  },
+  {
+   "row": 2,
+   "index": 1,
+   "label": "A",
+   "center": [
+    79.73,
+    169.11
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 2,
+   "index": 2,
+   "label": "S",
+   "center": [
+    88.57,
+    171.39
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 2,
+   "index": 3,
+   "label": "D",
+   "center": [
+    97.41,
+    173.66
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 2,
+   "index": 4,
+   "label": "F",
+   "center": [
+    106.25,
+    175.93
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 2,
+   "index": 5,
+   "label": "G",
+   "center": [
+    115.09,
+    178.2
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 2,
+   "index": 6,
+   "label": "H",
+   "center": [
+    123.93,
+    180.48
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 2,
+   "index": 7,
+   "label": "J",
+   "center": [
+    132.77,
+    182.75
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 2,
+   "index": 8,
+   "label": "K",
+   "center": [
+    141.6,
+    185.02
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 2,
+   "index": 9,
+   "label": "L",
+   "center": [
+    150.44,
+    187.3
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 2,
+   "index": 10,
+   "label": ";",
+   "center": [
+    159.28,
+    189.57
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 2,
+   "index": 11,
+   "label": "'",
+   "center": [
+    168.12,
+    191.84
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 2,
+   "index": 12,
+   "label": "enter",
+   "center": [
+    182.48,
+    195.53
+   ],
+   "em": 0.2,
+   "width": 2.25
+  },
+  {
+   "row": 3,
+   "index": 0,
+   "label": "tab",
+   "center": [
+    75.22,
+    158.36
+   ],
+   "em": 0.2,
+   "width": 1.5
+  },
+  {
+   "row": 3,
+   "index": 1,
+   "label": "Q",
+   "center": [
+    86.27,
+    161.2
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 3,
+   "index": 2,
+   "label": "W",
+   "center": [
+    95.1,
+    163.48
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 3,
+   "index": 3,
+   "label": "E",
+   "center": [
+    103.94,
+    165.75
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 3,
+   "index": 4,
+   "label": "R",
+   "center": [
+    112.78,
+    168.02
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 3,
+   "index": 5,
+   "label": "T",
+   "center": [
+    121.62,
+    170.29
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 3,
+   "index": 6,
+   "label": "Y",
+   "center": [
+    130.46,
+    172.57
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 3,
+   "index": 7,
+   "label": "U",
+   "center": [
+    139.3,
+    174.84
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 3,
+   "index": 8,
+   "label": "I",
+   "center": [
+    148.14,
+    177.11
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 3,
+   "index": 9,
+   "label": "O",
+   "center": [
+    156.97,
+    179.38
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 3,
+   "index": 10,
+   "label": "P",
+   "center": [
+    165.81,
+    181.66
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 3,
+   "index": 11,
+   "label": "[",
+   "center": [
+    174.65,
+    183.93
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 3,
+   "index": 12,
+   "label": "]",
+   "center": [
+    183.49,
+    186.2
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 3,
+   "index": 13,
+   "label": "\\",
+   "center": [
+    194.54,
+    189.04
+   ],
+   "em": 0.34,
+   "width": 1.5
+  },
+  {
+   "row": 4,
+   "index": 0,
+   "label": "`",
+   "center": [
+    81.75,
+    150.45
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 4,
+   "index": 1,
+   "label": "1",
+   "center": [
+    90.59,
+    152.72
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 4,
+   "index": 2,
+   "label": "2",
+   "center": [
+    99.43,
+    155.0
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 4,
+   "index": 3,
+   "label": "3",
+   "center": [
+    108.27,
+    157.27
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 4,
+   "index": 4,
+   "label": "4",
+   "center": [
+    117.1,
+    159.54
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 4,
+   "index": 5,
+   "label": "5",
+   "center": [
+    125.94,
+    161.81
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 4,
+   "index": 6,
+   "label": "6",
+   "center": [
+    134.78,
+    164.09
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 4,
+   "index": 7,
+   "label": "7",
+   "center": [
+    143.62,
+    166.36
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 4,
+   "index": 8,
+   "label": "8",
+   "center": [
+    152.46,
+    168.63
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 4,
+   "index": 9,
+   "label": "9",
+   "center": [
+    161.3,
+    170.91
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 4,
+   "index": 10,
+   "label": "0",
+   "center": [
+    170.13,
+    173.18
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 4,
+   "index": 11,
+   "label": "-",
+   "center": [
+    178.97,
+    175.45
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 4,
+   "index": 12,
+   "label": "=",
+   "center": [
+    187.81,
+    177.72
+   ],
+   "em": 0.34,
+   "width": 1
+  },
+  {
+   "row": 4,
+   "index": 13,
+   "label": "delete",
+   "center": [
+    201.07,
+    181.13
+   ],
+   "em": 0.2,
+   "width": 2
+  }
+ ]
+}
