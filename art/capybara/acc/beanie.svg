@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- typebud capybara: knit beanie; the tiny ears poke through. -->
+  <path d="M104 60 C104 38 126 30 152 30 C178 30 200 38 200 58 Z" fill="#E9785E"/>
+  <path d="M184 34 C196 40 200 48 200 58 L188 58 C190 50 188 42 184 34 Z" fill="#CC5F48"/>
+  <path d="M104 60 C104 38 126 30 152 30 C178 30 200 38 200 58 Z" fill="none" stroke="#3B2A1E" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M126 36 L124 52 M152 32 L152 50 M176 36 L178 52" fill="none" stroke="#CC5F48" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M100 58 C130 50 172 49 204 56 C206 61 205 66 203 69 C172 62 132 63 101 71 C98 67 98 62 100 58 Z" fill="#F4A08A"/>
+  <path d="M186 54 C196 55 202 56 204 56 C206 61 205 66 203 69 C198 68 192 66 186 66 Z" fill="#E9785E"/>
+  <path d="M100 58 C130 50 172 49 204 56 C206 61 205 66 203 69 C172 62 132 63 101 71 C98 67 98 62 100 58 Z" fill="none" stroke="#3B2A1E" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M112 59 L113 66 M124 57 L125 64 M136 55.5 L136.5 62.5 M148 55 L148 62 M160 55 L160 62 M172 55.5 L171.5 62.5 M184 56.5 L183.5 63.5 M195 58 L194.5 65" fill="none" stroke="#CC5F48" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="176" cy="34" r="7.5" fill="#FBE3A0" stroke="#3B2A1E" stroke-width="4"/>
+  <path d="M172.5 32 Q174 30 176.5 30.5" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <ellipse cx="113" cy="47" rx="9.5" ry="8.5" transform="rotate(-25 113 47)" fill="#B07A4A" stroke="#3B2A1E" stroke-width="4.5"/>
+  <ellipse cx="111.5" cy="45" rx="4.4" ry="3.6" transform="rotate(-25 111.5 45)" fill="#6B4A33"/>
+  <ellipse cx="190" cy="44" rx="10.5" ry="9.5" transform="rotate(20 190 44)" fill="#B07A4A" stroke="#3B2A1E" stroke-width="4.5"/>
+  <ellipse cx="190.5" cy="42" rx="5" ry="4" transform="rotate(20 190.5 42)" fill="#6B4A33"/>
+</svg>

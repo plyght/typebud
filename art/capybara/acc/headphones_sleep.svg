@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- typebud capybara: headphones refit to the loaf head; ears drawn over the band (sleep: follows the lowered head). -->
+  <defs>
+    <linearGradient id="hp-ring" gradientUnits="userSpaceOnUse" x1="0" y1="72" x2="0" y2="106">
+      <stop offset="0" stop-color="#4FC3F7"/>
+      <stop offset="0.25" stop-color="#7C6CFF"/>
+      <stop offset="0.45" stop-color="#E86BD8"/>
+      <stop offset="0.62" stop-color="#FF5C6C"/>
+      <stop offset="0.8" stop-color="#FFE45C"/>
+      <stop offset="1" stop-color="#5EE08A"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(-4 12) rotate(-6 152 80)">
+    <path d="M97 66 C85 65 80 76 80 86 C80 96 85 104 97 103 C93 96 92 90 92 85 C92 78 93 72 97 66 Z" fill="#2F333D" stroke="#22252C" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M88 76 C86 26 214 22 207 72" fill="none" stroke="#22252C" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M88 76 C86 26 214 22 207 72" fill="none" stroke="#3B414E" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M100 50 C116 36 146 31 170 34" fill="none" stroke="#474D5A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <ellipse cx="109" cy="46" rx="8.5" ry="7.5" transform="rotate(-30 109 46)" fill="#B07A4A" stroke="#3B2A1E" stroke-width="5"/>
+    <ellipse cx="107.5" cy="44" rx="4.2" ry="3.4" transform="rotate(-30 107.5 44)" fill="#6B4A33"/>
+    <ellipse cx="193" cy="45" rx="9.5" ry="8.5" transform="rotate(28 193 45)" fill="#B07A4A" stroke="#3B2A1E" stroke-width="5"/>
+    <ellipse cx="194" cy="43" rx="4.8" ry="3.8" transform="rotate(28 194 43)" fill="#6B4A33"/>
+    <path d="M140 41 C138 32 144 26 152 27 C148 30 148 34 152 37 C154 31 160 29 165 31 C160 34 158 38 158 41 Z" fill="#B07A4A"/>
+    <path d="M140 41 C138 32 144 26 152 27 C148 30 148 34 152 37 C154 31 160 29 165 31 C160 34 158 38 158 41" fill="none" stroke="#3B2A1E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <ellipse cx="200" cy="89" rx="10.5" ry="21.5" fill="#2F333D" stroke="#22252C" stroke-width="4.5"/>
+    <ellipse cx="210" cy="89" rx="13" ry="22" fill="#474D5A" stroke="#22252C" stroke-width="4.5"/>
+    <ellipse cx="212" cy="89" rx="6.5" ry="14" fill="#9FE8FF" stroke="url(#hp-ring)" stroke-width="3.5"/>
+    <ellipse cx="213" cy="89" rx="3" ry="8.5" fill="#474D5A"/>
+  </g>
+</svg>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- typebud capybara: ribbon bow beside the near ear. -->
+  <g transform="translate(178 44) rotate(14)">
+    <path d="M-2 0 C-8 -10 -20 -12 -19 -1 C-18 9 -8 8 -2 0 Z" fill="#F497B4" stroke="#3B2A1E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M2 0 C8 -10 20 -12 19 -1 C18 9 8 8 2 0 Z" fill="#F497B4" stroke="#3B2A1E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M9 -6 C14 -7 16 -4 16 0 C14 3 11 4 8 3 Z" fill="#E07A9C"/>
+    <path d="M-12 -4 Q-9 -1 -6 -1 M12 -4 Q9 -1 6 -1" fill="none" stroke="#E07A9C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M-3 5 L-8 13 M3 5 L8 13" fill="none" stroke="#3B2A1E" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M-3 5 L-8 13 M3 5 L8 13" fill="none" stroke="#F497B4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <ellipse cx="0" cy="0" rx="5" ry="5.5" fill="#F7B3C8" stroke="#3B2A1E" stroke-width="4"/>
+  </g>
+</svg>
