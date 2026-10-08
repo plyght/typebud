@@ -1,0 +1,128 @@
+{
+  "format": "typebud.soundpack",
+  "format_version": 1,
+  "id": "model-m",
+  "name": "IBM Model M (bucklespring)",
+  "description": "Every key of Ico Doornekamp's own IBM Model M space saver, sampled individually with press and release. Richest pack in the set; GPL-2.0 licensed, so shipped as a separately licensed data pack.",
+  "author": "Ico Doornekamp (bucklespring)",
+  "license": "GPL-2.0-only",
+  "license_file": "LICENSE",
+  "attribution": "IBM Model M samples from bucklespring, Copyright 2016 Ico Doornekamp (https://github.com/zevv/bucklespring), licensed under the GNU General Public License v2. Resampled, trimmed and loudness-normalized for typebud; the corresponding unmodified source samples are in the wav/ directory of that repository at the commit given in pack.json.",
+  "source": {
+    "url": "https://github.com/zevv/bucklespring",
+    "commit": "43274ed8bca545fde585d73d89086bf9ae5ed1d0",
+    "path": "wav"
+  },
+  "switch_type": "buckling-spring",
+  "tags": [
+    "clicky",
+    "vintage",
+    "ibm",
+    "model-m",
+    "per-key"
+  ],
+  "audio": {
+    "sample_rate": 48000,
+    "channels": 1,
+    "encoding": "pcm_s16le",
+    "container": "wav"
+  },
+  "loudness": {
+    "reference": "median keydown generic strike loudness (K-weighted, 50 ms window)",
+    "target_lufs": -23.0,
+    "gain_applied_db": -2.45,
+    "peak_ceiling_dbfs": -1.0
+  },
+  "playback": {
+    "pitch_jitter_cents": 0,
+    "gain_jitter_db": 0.5
+  },
+  "sounds": {
+    "down": {
+      "generic": [
+        "down/generic_01.wav",
+        "down/generic_02.wav",
+        "down/generic_03.wav",
+        "down/generic_04.wav",
+        "down/generic_05.wav",
+        "down/generic_06.wav",
+        "down/generic_07.wav",
+        "down/generic_08.wav",
+        "down/generic_09.wav",
+        "down/generic_10.wav",
+        "down/generic_11.wav",
+        "down/generic_12.wav"
+      ],
+      "digit": [
+        "down/digit_01.wav",
+        "down/digit_02.wav",
+        "down/digit_03.wav"
+      ],
+      "space": [
+        "down/space_01.wav"
+      ],
+      "enter": [
+        "down/enter_01.wav"
+      ],
+      "backspace": [
+        "down/backspace_01.wav"
+      ],
+      "tab": [
+        "down/tab_01.wav"
+      ],
+      "modifier": [
+        "down/modifier_01.wav",
+        "down/modifier_02.wav",
+        "down/modifier_03.wav",
+        "down/modifier_04.wav"
+      ],
+      "arrow": [
+        "down/arrow_01.wav",
+        "down/arrow_02.wav"
+      ]
+    },
+    "up": {
+      "generic": [
+        "up/generic_01.wav",
+        "up/generic_02.wav",
+        "up/generic_03.wav",
+        "up/generic_04.wav",
+        "up/generic_05.wav",
+        "up/generic_06.wav",
+        "up/generic_07.wav",
+        "up/generic_08.wav",
+        "up/generic_09.wav",
+        "up/generic_10.wav",
+        "up/generic_11.wav",
+        "up/generic_12.wav"
+      ],
+      "digit": [
+        "up/digit_01.wav",
+        "up/digit_02.wav",
+        "up/digit_03.wav"
+      ],
+      "space": [
+        "up/space_01.wav"
+      ],
+      "enter": [
+        "up/enter_01.wav"
+      ],
+      "backspace": [
+        "up/backspace_01.wav"
+      ],
+      "tab": [
+        "up/tab_01.wav"
+      ],
+      "modifier": [
+        "up/modifier_01.wav",
+        "up/modifier_02.wav",
+        "up/modifier_03.wav",
+        "up/modifier_04.wav"
+      ],
+      "arrow": [
+        "up/arrow_01.wav",
+        "up/arrow_02.wav"
+      ]
+    }
+  }
+}

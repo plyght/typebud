@@ -1,0 +1,394 @@
+{
+  "comment": "Recipes for the packs bundled with typebud. Rebuild with: python3 scripts/sounds/import_pack.py defaults --sources <cache dir>. See sounds/LICENSES.md for the license audit.",
+  "packs": [
+    {
+      "id": "nk-cream",
+      "name": "NovelKeys Cream",
+      "description": "Smooth, creamy self-lubricating linear switch with a soft, muted bottom-out.",
+      "author": "Thomas Lai (kbsim)",
+      "license": "MIT",
+      "attribution": "Sound samples from kbsim by Thomas Lai (https://github.com/tplai/kbsim), MIT License. Resampled, trimmed and loudness-normalized for typebud.",
+      "switch_type": "linear",
+      "tags": [
+        "linear",
+        "creamy",
+        "quiet"
+      ],
+      "bundle": "default",
+      "repo": {
+        "url": "https://github.com/tplai/kbsim",
+        "commit": "ba103f3b0afa9dab80447aa2e7e2ed80b6bd80e4"
+      },
+      "path": "src/assets/audio/cream",
+      "license_text_file": "LICENSE.md",
+      "playback": {
+        "pitch_jitter_cents": 15,
+        "gain_jitter_db": 1.0
+      }
+    },
+    {
+      "id": "holy-panda",
+      "name": "Holy Panda",
+      "description": "Deep, thocky tactile switch with a rounded low-pitched bottom-out.",
+      "author": "Thomas Lai (kbsim)",
+      "license": "MIT",
+      "attribution": "Sound samples from kbsim by Thomas Lai (https://github.com/tplai/kbsim), MIT License. Resampled, trimmed and loudness-normalized for typebud.",
+      "switch_type": "tactile",
+      "tags": [
+        "tactile",
+        "thocky",
+        "deep"
+      ],
+      "bundle": "default",
+      "repo": {
+        "url": "https://github.com/tplai/kbsim",
+        "commit": "ba103f3b0afa9dab80447aa2e7e2ed80b6bd80e4"
+      },
+      "path": "src/assets/audio/holypanda",
+      "license_text_file": "LICENSE.md",
+      "playback": {
+        "pitch_jitter_cents": 15,
+        "gain_jitter_db": 1.0
+      }
+    },
+    {
+      "id": "mx-brown",
+      "name": "Cherry MX Brown",
+      "description": "The classic light tactile switch: crisp, mid-pitched, office friendly.",
+      "author": "Thomas Lai (kbsim)",
+      "license": "MIT",
+      "attribution": "Sound samples from kbsim by Thomas Lai (https://github.com/tplai/kbsim), MIT License. Resampled, trimmed and loudness-normalized for typebud.",
+      "switch_type": "tactile",
+      "tags": [
+        "tactile",
+        "classic"
+      ],
+      "bundle": "default",
+      "repo": {
+        "url": "https://github.com/tplai/kbsim",
+        "commit": "ba103f3b0afa9dab80447aa2e7e2ed80b6bd80e4"
+      },
+      "path": "src/assets/audio/mxbrown",
+      "license_text_file": "LICENSE.md",
+      "playback": {
+        "pitch_jitter_cents": 15,
+        "gain_jitter_db": 1.0
+      }
+    },
+    {
+      "id": "box-navy",
+      "name": "Kailh Box Navy",
+      "description": "Heavy clicky switch with a thick click bar: loud, crisp and sharp. The set's 'clicky blue'.",
+      "author": "Thomas Lai (kbsim)",
+      "license": "MIT",
+      "attribution": "Sound samples from kbsim by Thomas Lai (https://github.com/tplai/kbsim), MIT License. Resampled, trimmed and loudness-normalized for typebud.",
+      "switch_type": "clicky",
+      "tags": [
+        "clicky",
+        "loud",
+        "heavy"
+      ],
+      "bundle": "default",
+      "repo": {
+        "url": "https://github.com/tplai/kbsim",
+        "commit": "ba103f3b0afa9dab80447aa2e7e2ed80b6bd80e4"
+      },
+      "path": "src/assets/audio/boxnavy",
+      "license_text_file": "LICENSE.md",
+      "playback": {
+        "pitch_jitter_cents": 30,
+        "gain_jitter_db": 1.5
+      }
+    },
+    {
+      "id": "alps-blue",
+      "name": "SKCM Blue Alps",
+      "description": "Vintage complicated-Alps clicky switch: sharp, metallic, slightly rattly. The closest thing to a typewriter in the set.",
+      "author": "Thomas Lai (kbsim)",
+      "license": "MIT",
+      "attribution": "Sound samples from kbsim by Thomas Lai (https://github.com/tplai/kbsim), MIT License. Resampled, trimmed and loudness-normalized for typebud.",
+      "switch_type": "clicky",
+      "tags": [
+        "clicky",
+        "vintage",
+        "alps"
+      ],
+      "bundle": "default",
+      "repo": {
+        "url": "https://github.com/tplai/kbsim",
+        "commit": "ba103f3b0afa9dab80447aa2e7e2ed80b6bd80e4"
+      },
+      "path": "src/assets/audio/bluealps",
+      "license_text_file": "LICENSE.md",
+      "playback": {
+        "pitch_jitter_cents": 15,
+        "gain_jitter_db": 1.0
+      }
+    },
+    {
+      "id": "buckling-spring",
+      "name": "IBM Buckling Spring",
+      "description": "IBM Model M style buckling spring: loud click plus a springy ping.",
+      "author": "Thomas Lai (kbsim)",
+      "license": "MIT",
+      "attribution": "Sound samples from kbsim by Thomas Lai (https://github.com/tplai/kbsim), MIT License. Resampled, trimmed and loudness-normalized for typebud.",
+      "switch_type": "buckling-spring",
+      "tags": [
+        "clicky",
+        "vintage",
+        "ibm",
+        "model-m"
+      ],
+      "bundle": "default",
+      "repo": {
+        "url": "https://github.com/tplai/kbsim",
+        "commit": "ba103f3b0afa9dab80447aa2e7e2ed80b6bd80e4"
+      },
+      "path": "src/assets/audio/buckling",
+      "license_text_file": "LICENSE.md",
+      "playback": {
+        "pitch_jitter_cents": 15,
+        "gain_jitter_db": 1.0
+      }
+    },
+    {
+      "id": "topre",
+      "name": "Topre",
+      "description": "Electro-capacitive rubber-dome switch with a muffled, rounded 'thock'.",
+      "author": "Thomas Lai (kbsim)",
+      "license": "MIT",
+      "attribution": "Sound samples from kbsim by Thomas Lai (https://github.com/tplai/kbsim), MIT License. Resampled, trimmed and loudness-normalized for typebud.",
+      "switch_type": "topre",
+      "tags": [
+        "topre",
+        "thocky",
+        "muted"
+      ],
+      "bundle": "default",
+      "repo": {
+        "url": "https://github.com/tplai/kbsim",
+        "commit": "ba103f3b0afa9dab80447aa2e7e2ed80b6bd80e4"
+      },
+      "path": "src/assets/audio/topre",
+      "license_text_file": "LICENSE.md",
+      "playback": {
+        "pitch_jitter_cents": 15,
+        "gain_jitter_db": 1.0
+      }
+    },
+    {
+      "id": "low-profile-brown",
+      "name": "Low-Profile Brown",
+      "description": "Logitech G915 TKL with low-profile GL tactile (brown) switches: short travel, thin and laptop-like.",
+      "author": "Nathan Fiscaletti (Keyboard Sounds Pro)",
+      "license": "MIT",
+      "attribution": "Sound samples from Keyboard Sounds Pro by Nathan Fiscaletti (https://github.com/keyboard-sounds/keyboardsounds-pro), profile 'logitech-g915-tkl-brown', MIT License. Resampled, trimmed and loudness-normalized for typebud.",
+      "switch_type": "low-profile",
+      "tags": [
+        "tactile",
+        "low-profile",
+        "laptop",
+        "quiet"
+      ],
+      "bundle": "default",
+      "repo": {
+        "url": "https://github.com/keyboard-sounds/keyboardsounds-pro",
+        "commit": "bac56ac700635c512e57621f35780c5b79eba4cd"
+      },
+      "path": "desktop/bundled-profiles/logitech-g915-tkl-brown",
+      "license_text_file": "LICENSE",
+      "playback": {
+        "pitch_jitter_cents": 10,
+        "gain_jitter_db": 1.0
+      },
+      "files": {
+        "down": {
+          "generic": [
+            "key-press-1.wav",
+            "key-press-2.wav",
+            "key-press-3.wav",
+            "key-press-4.wav",
+            "key-press-5.wav"
+          ],
+          "space": [
+            "space-press-1.wav",
+            "space-press-2.wav",
+            "space-press-3.wav"
+          ],
+          "enter": [
+            "enter-press-1.wav",
+            "enter-press-2.wav"
+          ],
+          "backspace": [
+            "enter-press-1.wav",
+            "enter-press-2.wav"
+          ]
+        },
+        "up": {
+          "generic": [
+            "key-release-1.wav",
+            "key-release-2.wav",
+            "key-release-3.wav",
+            "key-release-4.wav",
+            "key-release-5.wav"
+          ],
+          "space": [
+            "space-release-1.wav",
+            "space-release-2.wav",
+            "space-release-3.wav"
+          ],
+          "enter": [
+            "enter-release-1.wav",
+            "enter-release-2.wav"
+          ],
+          "backspace": [
+            "enter-release-1.wav",
+            "enter-release-2.wav"
+          ]
+        }
+      }
+    },
+    {
+      "id": "bubble-pop",
+      "name": "Bubble Pop",
+      "description": "Soft, cute water-bubble pops, made procedurally for typebud. Not a keyboard at all.",
+      "author": "typebud",
+      "license": "CC0-1.0",
+      "attribution": "Generated by scripts/sounds/synth_pop.py; no attribution required.",
+      "switch_type": "synthetic",
+      "tags": [
+        "cute",
+        "soft",
+        "synthetic"
+      ],
+      "bundle": "default",
+      "generator": "synth_pop",
+      "playback": {
+        "pitch_jitter_cents": 40,
+        "gain_jitter_db": 1.0
+      },
+      "license_text": "Bubble Pop sound pack for typebud.\n\nThese sounds were generated procedurally by scripts/sounds/synth_pop.py in the\ntypebud repository. To the extent possible under law, the typebud authors have\nwaived all copyright and related or neighboring rights to these sound files\n(CC0 1.0 Universal, https://creativecommons.org/publicdomain/zero/1.0/).\n"
+    },
+    {
+      "id": "model-m",
+      "name": "IBM Model M (bucklespring)",
+      "description": "Every key of Ico Doornekamp's own IBM Model M space saver, sampled individually with press and release. Richest pack in the set; GPL-2.0 licensed, so shipped as a separately licensed data pack.",
+      "author": "Ico Doornekamp (bucklespring)",
+      "license": "GPL-2.0-only",
+      "attribution": "IBM Model M samples from bucklespring, Copyright 2016 Ico Doornekamp (https://github.com/zevv/bucklespring), licensed under the GNU General Public License v2. Resampled, trimmed and loudness-normalized for typebud; the corresponding unmodified source samples are in the wav/ directory of that repository at the commit given in pack.json.",
+      "switch_type": "buckling-spring",
+      "tags": [
+        "clicky",
+        "vintage",
+        "ibm",
+        "model-m",
+        "per-key"
+      ],
+      "bundle": "optional-gpl",
+      "repo": {
+        "url": "https://github.com/zevv/bucklespring",
+        "commit": "43274ed8bca545fde585d73d89086bf9ae5ed1d0"
+      },
+      "path": "wav",
+      "license_text_file": "LICENSE",
+      "playback": {
+        "pitch_jitter_cents": 0,
+        "gain_jitter_db": 0.5
+      },
+      "options": {
+        "max_generic": 12,
+        "max_special": 4,
+        "max_down_ms": 220.0,
+        "max_up_ms": 200.0
+      },
+      "files": {
+        "down": {
+          "generic": [
+            "11-0.wav",
+            "13-0.wav",
+            "16-0.wav",
+            "19-0.wav",
+            "1e-0.wav",
+            "20-0.wav",
+            "23-0.wav",
+            "26-0.wav",
+            "2c-0.wav",
+            "2f-0.wav",
+            "31-0.wav",
+            "32-0.wav"
+          ],
+          "space": [
+            "39-0.wav"
+          ],
+          "enter": [
+            "1c-0.wav"
+          ],
+          "backspace": [
+            "0e-0.wav"
+          ],
+          "tab": [
+            "0f-0.wav"
+          ],
+          "modifier": [
+            "2a-0.wav",
+            "36-0.wav",
+            "1d-0.wav",
+            "38-0.wav"
+          ],
+          "arrow": [
+            "48-0.wav",
+            "50-0.wav"
+          ],
+          "digit": [
+            "03-0.wav",
+            "06-0.wav",
+            "09-0.wav"
+          ]
+        },
+        "up": {
+          "generic": [
+            "11-1.wav",
+            "13-1.wav",
+            "16-1.wav",
+            "19-1.wav",
+            "1e-1.wav",
+            "20-1.wav",
+            "23-1.wav",
+            "26-1.wav",
+            "2c-1.wav",
+            "2f-1.wav",
+            "31-1.wav",
+            "32-1.wav"
+          ],
+          "space": [
+            "39-1.wav"
+          ],
+          "enter": [
+            "1c-1.wav"
+          ],
+          "backspace": [
+            "0e-1.wav"
+          ],
+          "tab": [
+            "0f-1.wav"
+          ],
+          "modifier": [
+            "2a-1.wav",
+            "36-1.wav",
+            "1d-1.wav",
+            "38-1.wav"
+          ],
+          "arrow": [
+            "48-1.wav",
+            "50-1.wav"
+          ],
+          "digit": [
+            "03-1.wav",
+            "06-1.wav",
+            "09-1.wav"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "format": "typebud.soundpack",
+  "format_version": 1,
+  "id": "buckling-spring",
+  "name": "IBM Buckling Spring",
+  "description": "IBM Model M style buckling spring: loud click plus a springy ping.",
+  "author": "Thomas Lai (kbsim)",
+  "license": "MIT",
+  "license_file": "LICENSE",
+  "attribution": "Sound samples from kbsim by Thomas Lai (https://github.com/tplai/kbsim), MIT License. Resampled, trimmed and loudness-normalized for typebud.",
+  "source": {
+    "url": "https://github.com/tplai/kbsim",
+    "commit": "ba103f3b0afa9dab80447aa2e7e2ed80b6bd80e4",
+    "path": "src/assets/audio/buckling"
+  },
+  "switch_type": "buckling-spring",
+  "tags": [
+    "clicky",
+    "vintage",
+    "ibm",
+    "model-m"
+  ],
+  "audio": {
+    "sample_rate": 48000,
+    "channels": 1,
+    "encoding": "pcm_s16le",
+    "container": "wav"
+  },
+  "loudness": {
+    "reference": "median keydown generic strike loudness (K-weighted, 50 ms window)",
+    "target_lufs": -23.0,
+    "gain_applied_db": 8.27,
+    "peak_ceiling_dbfs": -1.0
+  },
+  "playback": {
+    "pitch_jitter_cents": 15,
+    "gain_jitter_db": 1.0
+  },
+  "sounds": {
+    "down": {
+      "generic": [
+        "down/generic_01.wav",
+        "down/generic_02.wav",
+        "down/generic_03.wav",
+        "down/generic_04.wav",
+        "down/generic_05.wav"
+      ],
+      "space": [
+        "down/space_01.wav"
+      ],
+      "enter": [
+        "down/enter_01.wav"
+      ],
+      "backspace": [
+        "down/backspace_01.wav"
+      ]
+    },
+    "up": {
+      "generic": [
+        "up/generic_01.wav"
+      ],
+      "space": [
+        "up/space_01.wav"
+      ],
+      "enter": [
+        "up/enter_01.wav"
+      ],
+      "backspace": [
+        "up/backspace_01.wav"
+      ]
+    }
+  }
+}

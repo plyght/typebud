@@ -1,0 +1,46 @@
+{
+  "format": "typebud.soundpack-index",
+  "format_version": 1,
+  "packs": [
+    {
+      "id": "nk-cream",
+      "bundle": "default"
+    },
+    {
+      "id": "holy-panda",
+      "bundle": "default"
+    },
+    {
+      "id": "mx-brown",
+      "bundle": "default"
+    },
+    {
+      "id": "box-navy",
+      "bundle": "default"
+    },
+    {
+      "id": "alps-blue",
+      "bundle": "default"
+    },
+    {
+      "id": "buckling-spring",
+      "bundle": "default"
+    },
+    {
+      "id": "topre",
+      "bundle": "default"
+    },
+    {
+      "id": "low-profile-brown",
+      "bundle": "default"
+    },
+    {
+      "id": "bubble-pop",
+      "bundle": "default"
+    },
+    {
+      "id": "model-m",
+      "bundle": "optional-gpl"
+    }
+  ]
+}

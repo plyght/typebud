@@ -1,0 +1,85 @@
+{
+  "format": "typebud.soundpack",
+  "format_version": 1,
+  "id": "low-profile-brown",
+  "name": "Low-Profile Brown",
+  "description": "Logitech G915 TKL with low-profile GL tactile (brown) switches: short travel, thin and laptop-like.",
+  "author": "Nathan Fiscaletti (Keyboard Sounds Pro)",
+  "license": "MIT",
+  "license_file": "LICENSE",
+  "attribution": "Sound samples from Keyboard Sounds Pro by Nathan Fiscaletti (https://github.com/keyboard-sounds/keyboardsounds-pro), profile 'logitech-g915-tkl-brown', MIT License. Resampled, trimmed and loudness-normalized for typebud.",
+  "source": {
+    "url": "https://github.com/keyboard-sounds/keyboardsounds-pro",
+    "commit": "bac56ac700635c512e57621f35780c5b79eba4cd",
+    "path": "desktop/bundled-profiles/logitech-g915-tkl-brown"
+  },
+  "switch_type": "low-profile",
+  "tags": [
+    "tactile",
+    "low-profile",
+    "laptop",
+    "quiet"
+  ],
+  "audio": {
+    "sample_rate": 48000,
+    "channels": 1,
+    "encoding": "pcm_s16le",
+    "container": "wav"
+  },
+  "loudness": {
+    "reference": "median keydown generic strike loudness (K-weighted, 50 ms window)",
+    "target_lufs": -23.0,
+    "gain_applied_db": 20.13,
+    "peak_ceiling_dbfs": -1.0
+  },
+  "playback": {
+    "pitch_jitter_cents": 10,
+    "gain_jitter_db": 1.0
+  },
+  "sounds": {
+    "down": {
+      "generic": [
+        "down/generic_01.wav",
+        "down/generic_02.wav",
+        "down/generic_03.wav",
+        "down/generic_04.wav",
+        "down/generic_05.wav"
+      ],
+      "space": [
+        "down/space_01.wav",
+        "down/space_02.wav",
+        "down/space_03.wav"
+      ],
+      "enter": [
+        "down/enter_01.wav",
+        "down/enter_02.wav"
+      ],
+      "backspace": [
+        "down/backspace_01.wav",
+        "down/backspace_02.wav"
+      ]
+    },
+    "up": {
+      "generic": [
+        "up/generic_01.wav",
+        "up/generic_02.wav",
+        "up/generic_03.wav",
+        "up/generic_04.wav",
+        "up/generic_05.wav"
+      ],
+      "space": [
+        "up/space_01.wav",
+        "up/space_02.wav",
+        "up/space_03.wav"
+      ],
+      "enter": [
+        "up/enter_01.wav",
+        "up/enter_02.wav"
+      ],
+      "backspace": [
+        "up/backspace_01.wav",
+        "up/backspace_02.wav"
+      ]
+    }
+  }
+}
