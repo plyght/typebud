@@ -318,7 +318,7 @@ pub const SettingsView = struct {
         const tb = app_mod.instance;
         const s = &tb.settings;
         const n = s.app_count;
-        for (s.appList(), 0..) |a, i| self.app_items[i] = .{ .title = a.name.slice(), .subtitle = a.id.slice(), .icon = zpui.intoAnyElement(appIcon(a.name.slice())) };
+        for (s.appList(), 0..) |*a, i| self.app_items[i] = .{ .title = a.name.slice(), .subtitle = a.id.slice(), .icon = zpui.intoAnyElement(appIcon(a.name.slice())) };
         const sel = if (self.selected_app) |x| (if (x < n) x else null) else null;
         const fg: []const u8 = if (tb.fg_id) |id| zpui.fmt("Front app now: {s}", .{id}) else "The front app is not reported on this desktop";
         const list_title = switch (s.visibility) {

@@ -299,6 +299,82 @@ const Loaded = struct {
 
 pub const master_headroom: f32 = 0.7079; // -3 dB
 
+/// One sample played (for re-rendering the exact track offline, e.g. the demo video).
+pub const Played = struct {
+    t_ns: u64,
+    info: *const Info,
+    d: Dir,
+    pool: Pool,
+    k: u32,
+    gain: f32,
+    pitch: f32,
+};
+
+pub const Recorder = struct {
+    gpa: Allocator,
+    events: std.ArrayList(Played) = .empty,
+    clock: *const fn (?*anyopaque) u64,
+    clock_ctx: ?*anyopaque = null,
+
+    pub fn deinit(r: *Recorder) void {
+        r.events.deinit(r.gpa);
+    }
+
+    /// Render the recorded plays from `start_ns` to `end_ns` through a null-backend mixer
+    /// with the same samples, gains and timing; 16-bit stereo WAV at the mixer rate.
+    pub fn renderWav(r: *const Recorder, io: Io, start_ns: u64, end_ns: u64, volume: f32) ![]u8 {
+        const gpa = r.gpa;
+        const a = try audio_mod.Audio.init(gpa, .{ .backend = .null });
+        defer a.deinit();
+        var p = Player.init(gpa, io, a);
+        defer p.deinit();
+        p.setVolume(volume);
+        const rate: u64 = a.sampleRate();
+        const total_frames: usize = @intCast((end_ns -| start_ns) * rate / std.time.ns_per_s + rate / 2);
+        const out = try gpa.alloc(f32, total_frames * 2);
+        defer gpa.free(out);
+        @memset(out, 0);
+        var pos: usize = 0;
+        for (r.events.items) |e| {
+            if (e.t_ns < start_ns) continue;
+            const at: usize = @min(@as(usize, @intCast((e.t_ns - start_ns) * rate / std.time.ns_per_s)), total_frames);
+            if (at > pos) {
+                a.renderOffline(out[pos * 2 .. at * 2]);
+                pos = at;
+            }
+            try p.select(e.info);
+            const l = &p.loaded.items[p.current.?];
+            const ids = l.ids[@intFromEnum(e.d)][@intFromEnum(e.pool)];
+            if (e.k < ids.len) a.play(ids[e.k], .{ .gain = e.gain, .pitch = e.pitch });
+        }
+        if (pos < total_frames) a.renderOffline(out[pos * 2 ..]);
+        return encodeWav16(gpa, out, @intCast(rate), 2);
+    }
+};
+
+/// Interleaved f32 → 16-bit PCM WAV (clipped).
+pub fn encodeWav16(gpa: Allocator, samples: []const f32, rate: u32, channels: u16) ![]u8 {
+    const data_len: u32 = @intCast(samples.len * 2);
+    const buf = try gpa.alloc(u8, 44 + data_len);
+    @memcpy(buf[0..4], "RIFF");
+    std.mem.writeInt(u32, buf[4..8], 36 + data_len, .little);
+    @memcpy(buf[8..16], "WAVEfmt ");
+    std.mem.writeInt(u32, buf[16..20], 16, .little);
+    std.mem.writeInt(u16, buf[20..22], 1, .little);
+    std.mem.writeInt(u16, buf[22..24], channels, .little);
+    std.mem.writeInt(u32, buf[24..28], rate, .little);
+    std.mem.writeInt(u32, buf[28..32], rate * channels * 2, .little);
+    std.mem.writeInt(u16, buf[32..34], channels * 2, .little);
+    std.mem.writeInt(u16, buf[34..36], 16, .little);
+    @memcpy(buf[36..40], "data");
+    std.mem.writeInt(u32, buf[40..44], data_len, .little);
+    for (samples, 0..) |x, i| {
+        const v: i16 = @intFromFloat(std.math.clamp(x, -1, 1) * 32767);
+        std.mem.writeInt(i16, buf[44 + i * 2 ..][0..2], v, .little);
+    }
+    return buf;
+}
+
 pub const Player = struct {
     gpa: Allocator,
     io: Io,
@@ -309,6 +385,7 @@ pub const Player = struct {
     last: [2][pool_count]?usize = @splat(@splat(null)),
     rng: std.Random.DefaultPrng = .init(0x50d),
     volume: f32 = 0.6,
+    recorder: ?*Recorder = null,
 
     pub fn init(gpa: Allocator, io: Io, a: ?*audio_mod.Audio) Player {
         var p: Player = .{ .gpa = gpa, .io = io, .audio = a, .arena = .init(gpa) };
@@ -379,7 +456,10 @@ pub const Player = struct {
         last.* = k;
         const cents = (r.float(f32) * 2 - 1) * l.info.pitch_jitter_cents;
         const db = (r.float(f32) * 2 - 1) * l.info.gain_jitter_db;
-        a.play(ids[k], .{ .gain = std.math.pow(f32, 10, db / 20), .pitch = std.math.pow(f32, 2, cents / 1200) });
+        const gain = std.math.pow(f32, 10, db / 20);
+        const pitch = std.math.pow(f32, 2, cents / 1200);
+        if (p.recorder) |rec| rec.events.append(rec.gpa, .{ .t_ns = rec.clock(rec.clock_ctx), .info = l.info, .d = d, .pool = rp, .k = @intCast(k), .gain = gain, .pitch = pitch }) catch {};
+        a.play(ids[k], .{ .gain = gain, .pitch = pitch });
     }
 };
 
@@ -448,6 +528,38 @@ test "pack validation rejects unsafe or broken packs" {
     try testing.expect(!safePath("C:/x.wav"));
     try testing.expect(!safePath("a\\b.wav"));
     try testing.expect(safePath("down/generic_01.wav"));
+}
+
+test "recorded plays re-render offline to a WAV" {
+    var lib = Library.init(testing.allocator);
+    defer lib.deinit();
+    lib.loadBundled();
+    const S = struct {
+        var t: u64 = 0;
+        fn now(_: ?*anyopaque) u64 {
+            return t;
+        }
+    };
+    var rec: Recorder = .{ .gpa = testing.allocator, .clock = S.now };
+    defer rec.deinit();
+    const a = try audio_mod.Audio.init(testing.allocator, .{ .backend = .null });
+    defer a.deinit();
+    var p = Player.init(testing.allocator, testing.io, a);
+    defer p.deinit();
+    p.recorder = &rec;
+    try p.select(lib.find("holy-panda").?);
+    for (0..10) |i| {
+        S.t = 1_000_000_000 + i * 100_000_000;
+        p.play(.down, .letter);
+    }
+    try testing.expectEqual(@as(usize, 10), rec.events.items.len);
+    const wav = try rec.renderWav(testing.io, 1_000_000_000, 2_000_000_000, 0.6);
+    defer testing.allocator.free(wav);
+    try testing.expect(wav.len > 44 + 48000 * 4);
+    var peak: i32 = 0;
+    var i: usize = 44;
+    while (i + 2 <= wav.len) : (i += 2) peak = @max(peak, @as(i32, @abs(std.mem.readInt(i16, wav[i..][0..2], .little))));
+    try testing.expect(peak > 300);
 }
 
 test "player selects packs and plays through the null backend" {
