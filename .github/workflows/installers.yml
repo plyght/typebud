@@ -230,6 +230,7 @@ jobs:
           test -f "$mnt/.DS_Store" && test -f "$mnt/.VolumeIcon.icns" && test -f "$mnt/.background/background.tiff"
           codesign --verify --deep --strict "$mnt/Typebud.app"
           xattr -px com.apple.FinderInfo "$mnt" || echo "::warning::volume root has no FinderInfo (custom icon flag)"
+          ls -la@ "$mnt"; file "$mnt/.VolumeIcon.icns"; GetFileInfo "$mnt" || true
           "$mnt/Typebud.app/Contents/MacOS/typebud" --version
           mkdir -p shots
           open "$mnt"

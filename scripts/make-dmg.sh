@@ -129,8 +129,21 @@ for _ in $(seq 1 20); do
 done
 [ -f "$mnt/.DS_Store" ] || { echo "error: Finder did not write .DS_Store (window layout missing)" >&2; exit 1; }
 
-# Set the volume icon flag again: Finder rewrites the root folder's FinderInfo when it saves
-# the window layout.
+# Volume icon, after the Finder layout (Finder rewrites the root folder's FinderInfo when it
+# saves the window): NSWorkspace writes .VolumeIcon.icns in the form IconServices expects and
+# sets the custom-icon flag; the copied icns + flag remain as the fallback.
+if ! osascript -l JavaScript - "$app/Contents/Resources/typebud.icns" "$mnt" <<'JXA'
+ObjC.import('AppKit');
+function run(argv) {
+  const img = $.NSImage.alloc.initWithContentsOfFile(argv[0]);
+  if (!img || img.isNil()) throw new Error('cannot read ' + argv[0]);
+  if (!$.NSWorkspace.sharedWorkspace.setIconForFileOptions(img, argv[1], 0)) throw new Error('setIcon failed');
+  return 'volume icon set';
+}
+JXA
+then
+  echo "warning: NSWorkspace setIcon failed; keeping the copied .VolumeIcon.icns" >&2
+fi
 set_custom_icon_flag "$mnt"
 echo "volume root FinderInfo: $(xattr -px com.apple.FinderInfo "$mnt" 2>/dev/null | tr -d '\n')"
 
