@@ -60,16 +60,13 @@ pub fn main(init: std.process.Init) !u8 {
         }
     }
 
-    var pk: [32]u8 = updater.release_key.public_key;
-    if (opts.public_key_hex) |h| {
-        _ = std.fmt.hexToBytes(&pk, std.mem.trim(u8, h, " \r\n")) catch {
-            std.debug.print("--public-key must be 64 hex characters\n", .{});
-            return 2;
-        };
-    } else if (!updater.release_key.configured) {
-        std.debug.print("release_key.zig still has the placeholder key; pass --public-key\n", .{});
+    const pk: [32]u8 = if (opts.public_key_hex) |h| updater.release_key.parseHex(h) orelse {
+        std.debug.print("--public-key must be 64 hex characters\n", .{});
         return 2;
-    }
+    } else updater.release_key.public_key orelse {
+        std.debug.print("this build has no update public key (-Dpublic-key); pass --public-key\n", .{});
+        return 2;
+    };
 
     if (std.mem.eql(u8, args[1], "verify")) return verify(io, arena, opts, pk);
     if (std.mem.eql(u8, args[1], "check")) return check(init, opts, pk);

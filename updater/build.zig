@@ -13,12 +13,18 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // The trusted update key is a build input, never part of the source tree
+    // (src/release_key.zig). Empty = this build has no key: no updates.
+    const key_opts = b.addOptions();
+    key_opts.addOption([]const u8, "public_key_hex", publicKeyOption(b));
+
     // The module the app imports: `@import("updater")`.
     const mod = b.addModule("updater", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
     });
+    mod.addOptions("updater_build_options", key_opts);
 
     // typebud-update-check (CI smoke test / debugging).
     const cli = addTool(b, "typebud-update-check", "src/cli.zig", mod, target, optimize);
@@ -35,7 +41,7 @@ pub fn build(b: *std.Build) void {
     const keygen_run = b.addRunArtifact(keygen);
     keygen_run.setCwd(b.path("."));
     keygen_run.addPassthruArgs();
-    b.step("keygen", "Generate the release signing keypair (prints the private key; never writes it)").dependOn(&keygen_run.step);
+    b.step("keygen", "Generate the release signing keypair (prints both keys; writes nothing)").dependOn(&keygen_run.step);
 
     const check_run = b.addRunArtifact(cli);
     check_run.addPassthruArgs();
@@ -54,11 +60,27 @@ pub fn build(b: *std.Build) void {
     for (cross_targets) |triple| {
         const t = b.resolveTargetQuery(std.Target.Query.parse(.{ .arch_os_abi = triple }) catch unreachable);
         const m = b.createModule(.{ .root_source_file = b.path("src/root.zig"), .target = t, .optimize = optimize });
+        m.addOptions("updater_build_options", key_opts);
         const tests = b.addTest(.{ .name = b.fmt("updater-test-{s}", .{triple}), .root_module = m });
         cross_step.dependOn(&tests.step);
         const c = addTool(b, b.fmt("typebud-update-check-{s}", .{triple}), "src/cli.zig", m, t, optimize);
         cross_step.dependOn(&c.step);
     }
+}
+
+/// `-Dpublic-key=<64 hex>`: the Ed25519 public key release manifests must be signed
+/// with. Unset or empty = no key (the app runs without updates). Anything else that
+/// isn't 64 hex characters stops the build rather than silently disabling updates.
+fn publicKeyOption(b: *std.Build) []const u8 {
+    const raw = b.option([]const u8, "public-key", "Ed25519 update public key (64 hex characters; default: none, updates disabled)") orelse return "";
+    const hex = std.mem.trim(u8, raw, " \t\r\n");
+    if (hex.len == 0) return "";
+    var bytes: [32]u8 = undefined;
+    const ok = hex.len == 64 and if (std.fmt.hexToBytes(&bytes, hex)) |_| true else |_| false;
+    if (!ok) std.process.fatal("update public key (-Dpublic-key / -Dupdate-public-key) must be 64 hex characters (got {d} characters)", .{hex.len});
+    _ = std.crypto.sign.Ed25519.PublicKey.fromBytes(bytes) catch
+        std.process.fatal("update public key (-Dpublic-key / -Dupdate-public-key) is not a valid Ed25519 public key", .{});
+    return std.ascii.allocLowerString(b.allocator, hex) catch @panic("OOM");
 }
 
 fn addTool(

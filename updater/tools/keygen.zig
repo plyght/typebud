@@ -1,12 +1,14 @@
 //! Generates the Ed25519 keypair used to sign typebud release manifests.
 //!
-//!   zig build keygen                         # print both keys
-//!   zig build keygen -- --write-public-key src/release_key.zig
+//!   zig build keygen
 //!
-//! The public key is printed as a Zig literal for `src/release_key.zig` (and can
-//! be written there directly with `--write-public-key`). The private key is
-//! printed ONCE to stdout for you to paste into the GitHub Actions secret
-//! `TYPEBUD_UPDATE_SIGNING_KEY`. This tool never writes the private key to disk.
+//! Prints both halves once, to stdout:
+//!   * the PUBLIC key  -> GitHub repository *variable* TYPEBUD_UPDATE_PUBLIC_KEY.
+//!     Not secret. Release builds compile it in (-Dupdate-public-key), which is
+//!     what switches automatic updates on.
+//!   * the PRIVATE key -> GitHub repository *secret* TYPEBUD_UPDATE_SIGNING_KEY,
+//!     plus an offline backup. The release workflow signs manifest.json with it.
+//! Nothing is written to disk and nothing in the repository changes.
 
 const std = @import("std");
 const Ed25519 = std.crypto.sign.Ed25519;
@@ -15,19 +17,12 @@ pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const arena = init.arena.allocator();
     const args = try init.minimal.args.toSlice(arena);
-
-    var write_public_key_path: ?[]const u8 = null;
-    var i: usize = 1;
-    while (i < args.len) : (i += 1) {
-        const a = args[i];
-        if (std.mem.eql(u8, a, "--write-public-key")) {
-            i += 1;
-            if (i >= args.len) fatal("--write-public-key needs a path", .{});
-            write_public_key_path = args[i];
-        } else if (std.mem.eql(u8, a, "-h") or std.mem.eql(u8, a, "--help")) {
-            std.debug.print("usage: keygen [--write-public-key path/to/release_key.zig]\n", .{});
+    for (args[1..]) |a| {
+        if (std.mem.eql(u8, a, "-h") or std.mem.eql(u8, a, "--help")) {
+            std.debug.print("usage: keygen   (prints a new keypair; writes nothing)\n", .{});
             return;
-        } else fatal("unknown argument: {s}", .{a});
+        }
+        fatal("unknown argument: {s}", .{a});
     }
 
     const kp = Ed25519.KeyPair.generate(io);
@@ -42,33 +37,24 @@ pub fn main(init: std.process.Init) !void {
     try out.print(
         \\# typebud update signing keypair (Ed25519)
         \\
-        \\## Public key -> updater/src/release_key.zig (commit this)
-        \\pub const public_key_hex = "{s}";
-        \\
-        \\## Private key -> GitHub repo secret TYPEBUD_UPDATE_SIGNING_KEY
-        \\## Settings > Secrets and variables > Actions > New repository secret.
-        \\## Store an offline backup (password manager). Do NOT commit it, paste it
-        \\## anywhere else, or keep it in shell history. Losing it means shipping a
-        \\## new app build with a new public key that users must install manually.
+        \\## 1. PUBLIC key -> repository VARIABLE  TYPEBUD_UPDATE_PUBLIC_KEY
+        \\##    GitHub > plyght/typebud > Settings > Secrets and variables > Actions > Variables
+        \\##    (or: gh variable set TYPEBUD_UPDATE_PUBLIC_KEY --body <key>)
+        \\##    Not secret. Release builds compile it in; that switches updates on.
         \\{s}
+        \\
+        \\## 2. PRIVATE key -> repository SECRET  TYPEBUD_UPDATE_SIGNING_KEY
+        \\##    Settings > Secrets and variables > Actions > Secrets
+        \\##    (or: gh secret set TYPEBUD_UPDATE_SIGNING_KEY, which prompts for it)
+        \\##    Keep an offline backup (password manager). Never commit it or paste it
+        \\##    anywhere else. Losing it means shipping a build with a new public key
+        \\##    that every user has to install by hand.
+        \\{s}
+        \\
+        \\## Then clear this terminal's scrollback.
         \\
     , .{ &pk_hex, &seed_hex });
     try out.flush();
-
-    if (write_public_key_path) |p| {
-        try writePublicKey(io, arena, p, &pk_hex);
-        std.debug.print("updated public key in {s}\n", .{p});
-    }
-}
-
-fn writePublicKey(io: std.Io, arena: std.mem.Allocator, path: []const u8, pk_hex: []const u8) !void {
-    const cwd = std.Io.Dir.cwd();
-    const src = try cwd.readFileAlloc(io, path, arena, .limited(1 << 20));
-    const marker = "pub const public_key_hex = \"";
-    const start = (std.mem.find(u8, src, marker) orelse fatal("{s}: no `{s}` line found", .{ path, marker })) + marker.len;
-    const end = std.mem.findScalarPos(u8, src, start, '"') orelse fatal("{s}: unterminated public_key_hex", .{path});
-    const new = try std.mem.concat(arena, u8, &.{ src[0..start], pk_hex, src[end..] });
-    try cwd.writeFile(io, .{ .sub_path = path, .data = new });
 }
 
 fn fatal(comptime fmt: []const u8, args: anytype) noreturn {

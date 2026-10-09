@@ -3,9 +3,10 @@
 //! !!! NEVER USE THIS KEY FOR RELEASES !!!
 //! The private seed is published right here in the repository, so anything
 //! signed with it is forgeable by anyone. It exists only so unit tests can
-//! sign and verify manifests. The real release key lives in release_key.zig
-//! (public half) and the TYPEBUD_UPDATE_SIGNING_KEY Actions secret (private).
-//! tools/sign.zig refuses to sign with a key that doesn't match release_key.zig.
+//! sign and verify manifests. The real release key is a build input
+//! (-Dpublic-key / the TYPEBUD_UPDATE_PUBLIC_KEY repository variable) and the
+//! TYPEBUD_UPDATE_SIGNING_KEY Actions secret (private). tools/sign.zig refuses
+//! to sign with a key that doesn't match the app's public key.
 
 const std = @import("std");
 const Ed25519 = std.crypto.sign.Ed25519;

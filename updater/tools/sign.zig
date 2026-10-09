@@ -4,10 +4,11 @@
 //!
 //! The private key is read from the environment (never from argv, so it
 //! doesn't show up in process listings or logs). Before signing, the derived
-//! public key is compared with the one compiled into the app
-//! (src/release_key.zig): if they differ, nothing is signed, because the app
-//! would reject the release anyway. `--expect-public-key HEX` replaces the
-//! pinned key (tests only).
+//! public key is compared with the one the app is built with: `--expect-public-key
+//! HEX` (CI passes the repository variable TYPEBUD_UPDATE_PUBLIC_KEY, the same value
+//! the release builds get as -Dupdate-public-key), or else the key this tool was
+//! built with (-Dpublic-key). If they differ, nothing is signed, because the app
+//! would reject the release anyway.
 
 const std = @import("std");
 const updater = @import("updater");
@@ -40,12 +41,11 @@ pub fn main(init: std.process.Init) !u8 {
     const kp = parseKey(std.mem.trim(u8, secret, " \t\r\n")) catch
         return fail("${s} must be the 64-hex-character key printed by keygen", .{key_env});
 
-    var pinned: [32]u8 = updater.release_key.public_key;
-    if (expect_hex) |h| {
-        _ = std.fmt.hexToBytes(&pinned, h) catch return fail("--expect-public-key: bad hex", .{});
-    } else if (!updater.release_key.configured) {
-        return fail("updater/src/release_key.zig still has the placeholder key; run keygen and commit the public key first", .{});
-    }
+    const pinned: [32]u8 = if (expect_hex) |h|
+        updater.release_key.parseHex(h) orelse return fail("--expect-public-key: must be 64 hex characters", .{})
+    else
+        updater.release_key.public_key orelse
+            return fail("no public key to check against: pass --expect-public-key HEX (the app's TYPEBUD_UPDATE_PUBLIC_KEY)", .{});
     if (!std.mem.eql(u8, &pinned, &kp.public_key.toBytes())) {
         const got = std.fmt.bytesToHex(kp.public_key.toBytes(), .lower);
         return fail("signing key does not match the public key embedded in the app (key's public half: {s})", .{&got});

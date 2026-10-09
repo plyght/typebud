@@ -216,3 +216,21 @@ test "asset URLs from other repos are ignored" {
     try testing.expect(!isTrustedAssetUrl("https://example.com/plyght/typebud/releases/download/x", default_download_base, "plyght", "typebud"));
     try testing.expect(!isTrustedAssetUrl("https://github.com.evil.example/plyght/typebud/releases/download/x", default_download_base, "plyght", "typebud"));
 }
+
+test "releases without a signed manifest are never offered" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const o: SelectOptions = .{ .owner = "plyght", .repo = "typebud", .channel = .stable };
+    // Newest release published without manifest.json/.sig (a build from a repo
+    // with no signing key): skipped, the older signed one is offered instead.
+    const mixed = comptime "[" ++ rel("v0.5.0", false, false, false) ++ "," ++ rel("v0.4.0", false, false, true) ++ "]";
+    try testing.expectEqualStrings("0.4.0", (try selectRelease(arena.allocator(), mixed, o)).?.version);
+    // Only unsigned releases: nothing to offer, so no manifest is ever fetched.
+    const unsigned = comptime "[" ++ rel("v0.5.0", false, false, false) ++ "," ++ rel("v0.4.0", false, false, false) ++ "]";
+    try testing.expect((try selectRelease(arena.allocator(), unsigned, o)) == null);
+    // manifest.json without manifest.json.sig is just as unsigned.
+    const base = "https://github.com/plyght/typebud/releases/download/v0.6.0/";
+    const no_sig = "[{\"tag_name\":\"v0.6.0\",\"assets\":[{\"name\":\"manifest.json\",\"browser_download_url\":\"" ++ base ++
+        "manifest.json\"},{\"name\":\"typebud-linux-x86_64.tar.gz\",\"browser_download_url\":\"" ++ base ++ "typebud-linux-x86_64.tar.gz\"}]}]";
+    try testing.expect((try selectRelease(arena.allocator(), no_sig, o)) == null);
+}

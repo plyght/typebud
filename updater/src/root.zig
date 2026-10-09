@@ -5,7 +5,7 @@
 //! var u = try updater.Updater.init(gpa, io, .{
 //!     .current_version = "0.1.0",
 //!     .channel = .stable,
-//!     .public_key = updater.release_key.public_key,
+//!     .public_key = updater.release_key.public_key orelse return, // null: no key, no updates
 //!     .environ_map = init.environ_map,
 //! });
 //! defer u.deinit();
@@ -45,8 +45,9 @@ pub const Options = struct {
     /// Version of the running app (semver, no leading `v`).
     current_version: []const u8,
     channel: Channel = .stable,
-    /// Ed25519 public key that release manifests must be signed with. Use
-    /// `release_key.public_key`.
+    /// Ed25519 public key that release manifests must be signed with: the
+    /// build-time `release_key.public_key` (null there means the build has no
+    /// key, and the app must not create an `Updater` at all).
     public_key: [32]u8,
     /// Process environment (`std.process.Init.environ_map`). Used for proxy
     /// settings, default directories and install detection (`$APPIMAGE`).
