@@ -148,7 +148,8 @@ pub const SettingsView = struct {
             .textSize(px(15)).fontWeight(700).textColor(look.fg).role(.heading).child(Section.labels[@intFromEnum(sec)]);
         const detail = div().absolute().top(px(0)).bottom(px(0)).left(px(sidebar_w)).right(px(0)).flex().flexCol()
             .child(title)
-            .child(div().flex1().minH(px(0)).child(self.page(window, look, cx, sec)));
+            // The form's 20 pt top margin less 8: the first section sits 12 pt under the band.
+            .child(div().flex1().minH(px(0)).mt(px(-8)).child(self.page(window, look, cx, sec)));
         return root.child(detail);
     }
 
