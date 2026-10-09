@@ -20,6 +20,9 @@ t = json.load(open(sys.argv[2]))
 print(f"{max(0.0, t['start_unix'] - rec_start):.3f} {t['duration'] + 0.5:.3f}")
 PY
 )
+# Windows Python prints CRLF; strip the CR so ffmpeg gets clean numbers
+offset=${offset%$'\r'}
+duration=${duration%$'\r'}
 echo "recording: $raw  tour starts at +${offset}s, lasts ${duration}s"
 encode() {
   local crf=$1

@@ -146,14 +146,14 @@ jobs:
         run: |
           mkdir -p rec
           python -c 'import time; print(f"{time.time():.3f}")' > rec/start_unix
-          ffmpeg -hide_banner -loglevel warning -f gdigrab -framerate 30 -i desktop \
-            -c:v libx264 -preset ultrafast -crf 18 -pix_fmt yuv420p rec/raw.mkv &
+          # ffmpeg stops itself after -t seconds (the tour is ~61 s), so the file is finalized
+          # cleanly; force-killing it on Windows can leave the container unreadable.
+          ffmpeg -hide_banner -loglevel warning -f gdigrab -framerate 30 -t 75 -i desktop \
+            -c:v libx264 -preset ultrafast -crf 18 -pix_fmt yuv420p rec/raw.mkv < /dev/null &
           FF=$!
           ./zig-out/bin/typebud.exe --demo 2>&1 | tee rec/demo.log
-          sleep 1
-          # ffmpeg has no window to close on Windows: stop it hard (Matroska stays readable).
-          taskkill //F //IM ffmpeg.exe || true
           wait $FF || true
+          ls -la rec
       - name: Mux, trim and encode
         shell: bash
         run: scripts/demo-encode.sh rec typebud-demo-windows.mp4
