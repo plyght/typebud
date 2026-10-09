@@ -1,0 +1,256 @@
+name: Installers
+
+# Builds the Windows installer (Inno Setup) and the macOS disk image from `zig build
+# package` output with the same scripts release.yml uses (scripts/make-installer-windows.ps1,
+# scripts/make-dmg.sh), then exercises them on real runners: silent install, upgrade over a
+# running copy, launch from the installed location, silent uninstall and cleanup on Windows;
+# mount, contents and a screenshot of the Finder window on macOS. Uploads the installers and
+# screenshots. See docs/RELEASING.md.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - packaging/**
+      - scripts/make-installer-*
+      - scripts/make-dmg*
+      - scripts/render_installer_art.py
+      - .github/workflows/installers.yml
+
+concurrency:
+  group: installers-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ZIG_VERSION: 0.17.0
+  CI_VERSION: 0.0.0-ci
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      APP_ID: "{90046696-87F8-4838-81E6-43CEE02FA39E}"
+    steps:
+      - uses: actions/checkout@v4
+      - name: zpui (pinned)
+        shell: bash
+        run: scripts/fetch-zpui.sh
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: Package
+        run: zig build package -Doptimize=ReleaseFast -Dversion=${{ env.CI_VERSION }} --prefix out/pkg --summary all
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+      - name: Build the installer
+        id: setup
+        run: ./scripts/make-installer-windows.ps1 -PackageDir out/pkg/typebud -Version $env:CI_VERSION
+
+      - name: Screenshot the wizard
+        run: |
+          New-Item -ItemType Directory -Force shots | Out-Null
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          Add-Type @'
+          using System;
+          using System.Runtime.InteropServices;
+          public static class Win {
+            [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
+            [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+            [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+            [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+          }
+          '@
+          [Win]::SetProcessDPIAware() | Out-Null
+          function Shot([string]$name, $hwnd) {
+            $v = [System.Windows.Forms.SystemInformation]::VirtualScreen
+            $bmp = New-Object System.Drawing.Bitmap $v.Width, $v.Height
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($v.Left, $v.Top, 0, 0, $bmp.Size)
+            $bmp.Save("shots\$name-screen.png")
+            $r = New-Object Win+RECT
+            if ($hwnd -ne [IntPtr]::Zero -and [Win]::GetWindowRect($hwnd, [ref]$r) -and $r.R -gt $r.L) {
+              $rect = New-Object System.Drawing.Rectangle ($r.L - $v.Left), ($r.T - $v.Top), ($r.R - $r.L), ($r.B - $r.T)
+              $bmp.Clone($rect, $bmp.PixelFormat).Save("shots\$name.png")
+            }
+            $g.Dispose(); $bmp.Dispose()
+          }
+          $setup = Start-Process -FilePath "${{ steps.setup.outputs.installer }}" -PassThru
+          # Setup.exe starts the wizard as a child process (is-*.tmp\<name>.tmp).
+          $wiz = $null
+          for ($i = 0; $i -lt 60 -and -not $wiz; $i++) {
+            Start-Sleep -Milliseconds 500
+            $wiz = Get-Process | Where-Object { $_.Path -like '*\is-*\*.tmp' -and $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+          }
+          Start-Sleep -Seconds 3
+          $h = if ($wiz) { $wiz.MainWindowHandle } else { [IntPtr]::Zero }
+          if ($wiz) { [Win]::SetForegroundWindow($h) | Out-Null; Start-Sleep -Milliseconds 700 }
+          Shot 'wizard-1-welcome' $h
+          if ($wiz) {
+            [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')   # -> Select Additional Tasks
+            Start-Sleep -Seconds 2
+            Shot 'wizard-2-tasks' $h
+          }
+          Get-Process | Where-Object { $_.Path -like '*\is-*\*.tmp' } | Stop-Process -Force -ErrorAction SilentlyContinue
+          Stop-Process -Id $setup.Id -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 2
+          Get-ChildItem shots
+
+      - name: Silent install
+        run: |
+          $setup = "${{ steps.setup.outputs.installer }}"
+          $p = Start-Process -FilePath $setup -Wait -PassThru -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/TASKS="desktopicon,startup"', '/LOG="install.log"'
+          if ($p.ExitCode -ne 0) { Get-Content install.log -ErrorAction SilentlyContinue; throw "installer exited with $($p.ExitCode)" }
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\typebud'
+          $exe = Join-Path $dir 'typebud.exe'
+          $checks = [ordered]@{
+            'typebud.exe'          = Test-Path $exe
+            'uninstaller'          = Test-Path (Join-Path $dir 'unins000.exe')
+            'Start Menu shortcut'  = Test-Path (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\typebud.lnk')
+            'desktop shortcut'     = Test-Path (Join-Path ([Environment]::GetFolderPath('Desktop')) 'typebud.lnk')
+            'Run value'            = ((Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue).typebud -eq "`"$exe`"")
+            'uninstall entry'      = ((Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\$($env:APP_ID)_is1" -ErrorAction SilentlyContinue).DisplayVersion -eq $env:CI_VERSION)
+            'no admin (HKLM clean)' = -not (Test-Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\$($env:APP_ID)_is1")
+          }
+          $checks.GetEnumerator() | ForEach-Object { '{0,-24} {1}' -f $_.Key, $_.Value }
+          Get-ChildItem $dir | Format-Table Name, Length
+          if ($checks.Values -contains $false) { throw 'install checks failed' }
+
+      - name: Launch from the installed location (--smoke)
+        timeout-minutes: 6
+        run: |
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs\typebud\typebud.exe'
+          New-Item -ItemType Directory -Force smoke-run | Out-Null
+          $p = Start-Process -FilePath $exe -ArgumentList '--smoke' -WorkingDirectory smoke-run -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput smoke-run\stdout.log -RedirectStandardError smoke-run\smoke.log
+          Get-Content smoke-run\smoke.log
+          $log = Get-Content -Raw smoke-run\smoke.log
+          if ($log -notmatch 'typebud smoke on windows' -or -not (Test-Path smoke-run\zig-out\smoke\pet_1_idle.png)) {
+            throw "installed typebud.exe did not start (exit $($p.ExitCode))"
+          }
+          # Pet-state timing assertions belong to app.yml; here we only need a working install.
+          if ($p.ExitCode -ne 0) { Write-Host "::warning::typebud --smoke exited $($p.ExitCode) (see smoke.log); the installed app started and rendered" }
+
+      - name: Upgrade in place over a running typebud
+        run: |
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\typebud'
+          $exe = Join-Path $dir 'typebud.exe'
+          $running = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 5
+          if ($running.HasExited) { Write-Host "::warning::typebud exited on its own ($($running.ExitCode)) before the upgrade" }
+          $p = Start-Process -FilePath "${{ steps.setup.outputs.installer }}" -Wait -PassThru -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/TASKS="desktopicon,startup"', '/LOG="upgrade.log"'
+          if ($p.ExitCode -ne 0) { Get-Content upgrade.log; throw "upgrade exited with $($p.ExitCode)" }
+          $left = Get-Process typebud -ErrorAction SilentlyContinue
+          if ($left) { $left | Format-Table Id, Path; throw 'typebud still running after the upgrade' }
+          $entries = @(Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' | Where-Object { $_.PSChildName -like '*90046696*' })
+          if ($entries.Count -ne 1) { throw "expected one uninstall entry, found $($entries.Count)" }
+          if (-not (Test-Path $exe)) { throw 'typebud.exe missing after the upgrade' }
+          Select-String -Path upgrade.log -Pattern 'close|taskkill|Restart Manager' -SimpleMatch:$false | Select-Object -First 10 | ForEach-Object Line
+
+      - name: Silent uninstall keeps settings
+        run: |
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\typebud'
+          $settings = Join-Path $env:APPDATA 'typebud'
+          New-Item -ItemType Directory -Force $settings | Out-Null
+          Set-Content (Join-Path $settings 'ci-marker.txt') 'keep me'
+          $p = Start-Process -FilePath (Join-Path $dir 'unins000.exe') -Wait -PassThru -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+          # The uninstaller re-runs itself from %TEMP%; wait for it to finish removing files.
+          for ($i = 0; $i -lt 60 -and (Test-Path $dir); $i++) { Start-Sleep -Seconds 1 }
+          $checks = [ordered]@{
+            'install dir removed'   = -not (Test-Path $dir)
+            'Start Menu removed'    = -not (Test-Path (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\typebud.lnk'))
+            'desktop removed'       = -not (Test-Path (Join-Path ([Environment]::GetFolderPath('Desktop')) 'typebud.lnk'))
+            'Run value removed'     = $null -eq (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue).typebud
+            'uninstall entry gone'  = -not (Test-Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\$($env:APP_ID)_is1")
+            'settings kept'         = Test-Path (Join-Path $settings 'ci-marker.txt')
+          }
+          $checks.GetEnumerator() | ForEach-Object { '{0,-24} {1}' -f $_.Key, $_.Value }
+          if ($checks.Values -contains $false) { throw 'uninstall checks failed' }
+
+      - name: Reinstall, then uninstall with /REMOVESETTINGS
+        run: |
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\typebud'
+          $settings = Join-Path $env:APPDATA 'typebud'
+          $p = Start-Process -FilePath "${{ steps.setup.outputs.installer }}" -Wait -PassThru -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+          if ($p.ExitCode -ne 0) { throw "reinstall exited with $($p.ExitCode)" }
+          if ((Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue).typebud) { throw 'Run value written without the startup task' }
+          if (Test-Path (Join-Path ([Environment]::GetFolderPath('Desktop')) 'typebud.lnk')) { throw 'desktop shortcut created without the task' }
+          Start-Process -FilePath (Join-Path $dir 'unins000.exe') -Wait -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/REMOVESETTINGS'
+          for ($i = 0; $i -lt 60 -and ((Test-Path $dir) -or (Test-Path $settings)); $i++) { Start-Sleep -Seconds 1 }
+          if (Test-Path $dir) { throw 'install dir left behind' }
+          if (Test-Path $settings) { throw 'settings left behind despite /REMOVESETTINGS' }
+          'clean'
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: installer-windows
+          path: |
+            dist/*.exe
+            shots/
+            install.log
+            upgrade.log
+            smoke-run/*.log
+          if-no-files-found: warn
+
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: zpui (pinned)
+        run: scripts/fetch-zpui.sh
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: Package Typebud.app (universal)
+        run: |
+          zig build package -Doptimize=ReleaseFast -Dversion=$CI_VERSION -Duniversal=true --prefix out/pkg --summary all
+          codesign --force --deep --sign - out/pkg/Typebud.app
+          codesign --verify --deep --strict out/pkg/Typebud.app
+      - name: Build the disk image
+        id: dmg
+        run: scripts/make-dmg.sh out/pkg/Typebud.app "$CI_VERSION"
+      - name: Verify, screenshot the Finder window
+        run: |
+          set -x
+          dmg="${{ steps.dmg.outputs.dmg }}"
+          hdiutil imageinfo "$dmg" | grep -E '^Format:|Format Description' || true
+          attach=$(hdiutil attach -noautoopen "$dmg")
+          echo "$attach"
+          mnt=$(echo "$attach" | awk -F'\t' '/Apple_HFS/ {print $NF; exit}')
+          test "$mnt" = /Volumes/typebud
+          test -d "$mnt/Typebud.app/Contents/MacOS"
+          test -L "$mnt/Applications" && test "$(readlink "$mnt/Applications")" = /Applications
+          test -f "$mnt/.DS_Store" && test -f "$mnt/.VolumeIcon.icns" && test -f "$mnt/.background/background.tiff"
+          codesign --verify --deep --strict "$mnt/Typebud.app"
+          "$mnt/Typebud.app/Contents/MacOS/typebud" --version
+          mkdir -p shots
+          open "$mnt"
+          sleep 4
+          osascript -e 'tell application "Finder" to activate' -e 'tell application "Finder" to set index of window "typebud" to 1' || true
+          sleep 2
+          cat > winid.swift <<'SWIFT'
+          import CoreGraphics
+          let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+          for w in list where (w[kCGWindowOwnerName as String] as? String) == "Finder" && (w[kCGWindowName as String] as? String) == "typebud" {
+            print(w[kCGWindowNumber as String] as! Int); break
+          }
+          SWIFT
+          wid=$(swift winid.swift 2>/dev/null || true)
+          echo "window id: ${wid:-none}"
+          if [ -n "$wid" ]; then screencapture -x -o -l"$wid" shots/dmg-window.png; fi
+          screencapture -x shots/dmg-screen.png
+          osascript -e 'tell application "Finder" to get bounds of window "typebud"' || true
+          osascript -e 'tell application "Finder" to close window "typebud"' || true
+          hdiutil detach "$mnt"
+          ls -la shots "$(dirname "$dmg")"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: installer-macos
+          path: |
+            dist/*.dmg
+            shots/
+          if-no-files-found: warn
