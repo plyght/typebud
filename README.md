@@ -39,15 +39,15 @@ You can grab the latest build from [**Releases**](https://github.com/plyght/type
 
 On **macOS**, typebud notices typing without asking for any permission. Turn on **Precise Typing Detection** in Settings if you'd like the paws to follow exactly which side of the keyboard you hit (macOS will ask for Input Monitoring).
 
-On **Linux under Wayland**, apps can't see system-wide key presses, so typebud reads your keyboard devices directly. Add yourself to the `input` group (`sudo usermod -aG input $USER`, then log out and back in). X11 works out of the box.
+On **Linux under Wayland**, apps can't see system-wide key presses, so typebud reads your keyboard devices directly, which works once you add yourself to the `input` group with `sudo usermod -aG input $USER` and log back in. On X11 it works straight away.
 
 ## Privacy
 
-typebud only ever learns *that* a key was pressed, and roughly where on the keyboard, so it knows which paw to move. It never sees or stores what you type. It works fully offline. The only time it touches the network is the optional update check, which reads this repo's GitHub releases.
+typebud only ever learns *that* a key was pressed and roughly where it sits on the keyboard, which is all it needs to pick a paw, so it never sees or stores what you actually type. Everything runs offline, and the only time it reaches the network is the optional update check, which reads this repository's GitHub releases.
 
 ## Build from source
 
-You'll need [Zig 0.17](https://ziglang.org/download/). typebud is built on [zpui](https://github.com/plyght/zpui), a Zig port of Zed's GPU UI framework.
+You'll need [Zig 0.17](https://ziglang.org/download/), and typebud is built on [zpui](https://github.com/plyght/zpui), a Zig port of Zed's GPU UI framework.
 
 ```sh
 git clone https://github.com/plyght/typebud && cd typebud
