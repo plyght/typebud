@@ -1,8 +1,18 @@
 # Updates
 
-typebud updates itself from the GitHub Releases of `plyght/typebud`. Every release
-carries a `manifest.json` signed with an Ed25519 key whose public half is
-compiled into the app; nothing is installed unless it matches that manifest.
+typebud updates itself from the GitHub Releases of `plyght/typebud`. A release
+that supports updates carries a `manifest.json` signed with an Ed25519 key whose
+public half is compiled into the app; nothing is installed unless it matches that
+manifest.
+
+**Updates are optional per build.** The public key is a build input
+(`zig build -Dupdate-public-key=<64 hex>`), not part of the source tree. A build
+without one (the default, and every release until the owner creates the key)
+links the updater but never touches the network: Settings > System says
+"Automatic updates aren't enabled for this build" with a **View Releases**
+button, and the tray's "Check for Updates…" opens the releases page. A build
+with a key checks every 6 hours and on **Check Now**, and only ever installs
+releases whose signed manifest verifies. See [Enabling updates](#enabling-updates).
 
 The code lives in `updater/`, a standalone Zig module with its own `build.zig`:
 
@@ -16,12 +26,14 @@ The code lives in `updater/`, a standalone Zig module with its own `build.zig`:
 | `updater/src/apply.zig` | Extraction, per-platform install, relaunch, cleanup |
 | `updater/src/http.zig` | HTTPS via `std.http.Client`: ETag requests, resumable downloads |
 | `updater/src/state.zig` | `update-state.json` and the check schedule |
-| `updater/src/release_key.zig` | **The** trusted public key (placeholder until you run keygen) |
+| `updater/src/release_key.zig` | The trusted public key, read from the build option `-Dpublic-key` (none by default) |
 | `updater/src/test_keys.zig` | Test-only keypair. Its private key is public. Never use it for releases. |
 | `updater/src/cli.zig` | `typebud-update-check`, used in CI |
 | `updater/tools/keygen.zig` | Generates the signing keypair |
 | `updater/tools/mkmanifest.zig` | Writes `manifest.json` (sizes + SHA-256) in CI |
 | `updater/tools/sign.zig` | Signs `manifest.json` in CI |
+| `src/updates.zig` | The app's side: schedule, check/download/apply, the "no key" mode |
+| `src/update_hook.zig` | What the settings window and tray call; status strings |
 | `.github/workflows/release.yml` | Build, sign and publish pipeline |
 
 ## How it works
@@ -133,6 +145,9 @@ reads so the app can show an "Updated to X" message.
 
 ## Integrating in the app
 
+The app already does all of this (`build.zig`, `src/updates.zig`, `src/main.zig`);
+this is the shape of it.
+
 `typebud/build.zig.zon`:
 
 ```zig
@@ -142,10 +157,10 @@ reads so the app can show an "Updated to X" message.
 },
 ```
 
-`typebud/build.zig`:
+`typebud/build.zig` (the app's `-Dupdate-public-key` goes through to the updater):
 
 ```zig
-const updater_dep = b.dependency("updater", .{ .target = target, .optimize = optimize });
+const updater_dep = b.dependency("updater", .{ .target = target, .optimize = optimize, .@"public-key" = update_key });
 exe.root_module.addImport("updater", updater_dep.module("updater"));
 ```
 
@@ -154,12 +169,14 @@ App code:
 ```zig
 const updater = @import("updater");
 
+// null: this build has no key. Don't create an Updater; show the releases page instead.
+const key = updater.release_key.public_key orelse return;
 var u = try updater.Updater.init(gpa, io, .{
     .owner = "plyght",
     .repo = "typebud",
     .current_version = build_options.version,   // e.g. "0.1.0"
     .channel = if (prefs.beta_updates) .beta else .stable,
-    .public_key = updater.release_key.public_key,
+    .public_key = key,
     .environ_map = init.environ_map,             // proxies, default dirs, $APPIMAGE
 });
 defer u.deinit();
@@ -185,8 +202,9 @@ if (try u.applyAndRelaunch() == .relaunched) quit();     // or: u.applyOnQuit();
 Notes:
 
 * `init` takes `io` (Zig 0.17 `std.Io`) as well as the allocator. It returns
-  `error.UpdateKeyNotConfigured` while `release_key.zig` holds the placeholder
-  key. In that case, disable the update UI.
+  `error.UpdateKeyNotConfigured` for an all-zero or invalid key. A build without
+  a key never gets that far: `release_key.public_key` is null and the app
+  creates no `Updater` at all.
 * `check()` blocks for one or more HTTPS round trips. Call it from
   `checkInBackground` or another short-lived thread if the UI thread must not
   block. `Status` slices stay valid until the next check or `deinit`. Don't run
@@ -212,8 +230,9 @@ Notes:
   blocks trivial tampering with the release list.
 * **Takeover of the GitHub account or repo without the signing key.** An
   attacker can publish a release but can't produce a valid `manifest.json.sig`,
-  so clients refuse it. They can't strip the signature either: unsigned
-  releases are never offered.
+  so clients refuse it. They can't strip the signature either: releases without
+  `manifest.json` + `manifest.json.sig` (including the keyless releases published
+  before updates were enabled) are never offered.
 * **Tampered or truncated downloads.** Size and SHA-256 are checked after the
   download, and again right before installing. A corrupt partial file is
   thrown away and downloaded again once.
@@ -258,36 +277,46 @@ Notes:
   timeout. A stalled check or download blocks its thread until the OS gives up
   on the connection. Downloads can be cancelled with `cancelDownload()`.
 
-## One-time setup: the signing key
+## Enabling updates
 
-1. Generate the keypair on a trusted machine:
+Nothing in the repository changes; it's two GitHub settings and a release.
+
+1. On a trusted machine, generate the keypair:
 
    ```sh
-   cd updater
-   zig build keygen -- --write-public-key src/release_key.zig
+   cd updater && zig build keygen
    ```
 
-   This prints the public key, writes it into `src/release_key.zig`, and
-   prints the **private key** (64 hex characters) to stdout. The private key
-   is never written to disk.
+   It prints a **public key** and a **private key** (64 hex characters each) and
+   writes nothing to disk.
 
-2. Add the private key as a repository secret: GitHub → `plyght/typebud` →
-   Settings → Secrets and variables → Actions → New repository secret. Name it
-   `TYPEBUD_UPDATE_SIGNING_KEY` and paste the 64-hex-character value. With
-   the `gh` CLI, `gh secret set TYPEBUD_UPDATE_SIGNING_KEY` prompts for it
-   without putting it in shell history.
+2. Add a repository **variable** `TYPEBUD_UPDATE_PUBLIC_KEY` = the printed public
+   key: GitHub > `plyght/typebud` > Settings > Secrets and variables > Actions >
+   Variables > New repository variable (or
+   `gh variable set TYPEBUD_UPDATE_PUBLIC_KEY --body <public key>`). It isn't
+   secret; release builds compile it in with `-Dupdate-public-key`.
 
-3. Store an offline backup, for example in a password manager. If the key is
-   lost, every installed copy has to be updated by hand to a build with a new
-   public key.
+3. Add a repository **secret** `TYPEBUD_UPDATE_SIGNING_KEY` = the printed private
+   key (Secrets > New repository secret, or `gh secret set TYPEBUD_UPDATE_SIGNING_KEY`,
+   which prompts so the key stays out of shell history). Keep an offline backup,
+   for example in a password manager, then clear the terminal scrollback. If the
+   key is lost, every installed copy must be updated by hand to a build with a
+   new public key.
 
-4. Clear the terminal scrollback, then commit `updater/src/release_key.zig`.
+4. Tag a release (below). The workflow sees both settings, builds with the key,
+   and signs `manifest.json`. Builds from that release on update themselves.
+   Copies of earlier, keyless builds never check, so their users install the
+   first keyed release manually once.
 
-CI checks this setup. `tools/sign.zig` refuses to sign if the secret's public
-half doesn't match `release_key.zig`, and the `meta` job refuses to release
-while `release_key.zig` holds the all-zero placeholder.
+The workflow only compiles the key in when **both** are set, so a build that
+checks for updates always comes with a signed release. It refuses to sign if the
+secret's public half doesn't equal the variable (`typebud-sign
+--expect-public-key`), then verifies the result exactly as the app would
+(`typebud-update-check verify`). A malformed variable fails the `meta` job.
 
-### Optional: macOS Developer ID and notarization
+To try a keyed build locally: `zig build -Dupdate-public-key=<hex>`.
+
+## Optional: macOS Developer ID and notarization
 
 Without these secrets the macOS build is ad-hoc signed and the workflow
 continues with a warning. Add all five to get Developer ID signing and
@@ -306,40 +335,39 @@ All five give signing, notarization and stapling.
 
 ## Cutting a release
 
-1. Bump the app version (TODO(app): keep the version in one place, such as
-   `build.zig.zon`, and pass it to the app as a build option. The `meta` job
-   has a TODO to check that the tag matches it.)
-2. Tag and push:
+1. Set the version in `build.zig.zon` (`.version`); the tag must match it.
+2. Optionally rehearse: **Actions > Release > Run workflow** with `version` (e.g.
+   `0.2.0-rc`) and `dry_run` checked. It builds and packages every platform and
+   uploads the files as the run's `release-dry-run` artifact; no tag, no release.
+3. Tag and push:
 
    ```sh
-   git tag v0.2.0 && git push origin v0.2.0          # stable
-   git tag v0.3.0-beta.1 && git push origin v0.3.0-beta.1   # beta channel only
+   git tag -a v0.2.0 -m "typebud 0.2.0" && git push origin v0.2.0      # stable
+   git tag -a v0.3.0-beta.1 -m "typebud 0.3.0-beta.1" && git push origin v0.3.0-beta.1   # beta channel
    ```
 
-   Or start **Actions → Release → Run workflow** with `version` (and,
-   optionally, a `zpui_ref`). This creates the tag at the current commit.
-3. The workflow then:
+   (Or run the workflow with `dry_run` unchecked: it creates the tag at that commit.)
+4. The workflow:
    1. checks the version (semver; a `-pre` suffix means the beta channel and a
-      GitHub pre-release) and that the update key is configured.
+      GitHub pre-release) and whether updates are configured (see above).
    2. runs the updater tests and cross-compiles them for every target.
-   3. builds macOS (aarch64 and x86_64, combined with `lipo`, packaged as
-      `Typebud.app`, signed, zipped with `ditto`, notarized if possible),
-      Windows x86_64 (plus aarch64, cross-compiled; optional), and Linux
-      x86_64 (tarball with the `.typebud-install` marker, and an AppImage via
-      `appimagetool`). zpui is checked out to `zpui/` at the pinned ref
-      (`ZPUI_DEFAULT_REF` or the `zpui_ref` input). This doesn't trigger
-      zpui's own workflows.
-   4. writes `manifest.json` (`typebud-mkmanifest`), signs it
-      (`typebud-sign`), and verifies it exactly as the app would
-      (`typebud-update-check verify`).
-   5. creates the release as a draft with every asset, then publishes it.
-   6. runs `typebud-update-check check --current 0.0.0 --download` against
-      the live release.
+   3. fetches zpui at the commit `build.zig` pins (`scripts/fetch-zpui.sh`) and runs
+      `zig build package -Doptimize=ReleaseFast -Dversion=<version>` per platform:
+      macOS aarch64 + x86_64 combined with `lipo` and packaged with `-Dmacos-exe`
+      (`Typebud.app`, ad-hoc signed, or Developer ID + notarized when those secrets
+      exist), Windows x86_64 (portable zip), Linux x86_64 (tarball with the
+      `.typebud-install` marker, and an AppImage built with appimagetool 1.9.1 and
+      type2-runtime 20251108, both pinned by SHA-256).
+   4. with updates configured: writes, signs and verifies `manifest.json`.
+   5. creates the release as a draft with every asset (`typebud-macos-universal.zip`,
+      `typebud-windows-x86_64.zip`, `typebud-linux-x86_64.tar.gz`,
+      `typebud-linux-x86_64.AppImage`, `SHA256SUMS.txt`, and the manifest pair when
+      signed), then publishes it. Without updates configured, the notes start with
+      "Automatic updates not enabled for this build".
+   6. with updates configured: runs `typebud-update-check check --current 0.0.0
+      --download` against the live release.
 
-The build steps call `zig build -Doptimize=ReleaseFast` and
-`zig build package` at the repo root. `package` doesn't exist yet. Its expected
-inputs and outputs are listed next to the `TODO(app)` markers in
-`.github/workflows/release.yml`.
+Never move or delete a published tag; fix forward with the next patch version.
 
 ## Development
 
@@ -348,6 +376,7 @@ cd updater
 zig build test     # unit tests + mkmanifest → sign → verify round trip (test key)
 zig build cross    # compile for x86_64/aarch64 Windows, macOS, Linux
 zig build check -- check --current 0.0.0 --public-key <hex>   # live check
+zig build keygen   # new keypair (prints only)
 ```
 
 The unit tests cover:
@@ -362,6 +391,11 @@ The unit tests cover:
 * the mac swap and Windows rename plans as pure functions, and executed on a
   temp dir, including injected failures with rollback
 * zip and tar.gz installs from fixture archives
+* releases without a signed manifest are skipped
+
+The app's tests (`zig build test` at the repo root) cover the keyless mode (no
+`Updater`, no network, the releases page instead), the keyed mode (checks
+scheduled on the app's loop) and the settings status strings.
 
 `typebud-update-check check` accepts `--api-base` and `--download-base` to
 point it at a local mock server, which is how ETag/304 handling, redirects,

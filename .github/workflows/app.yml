@@ -19,6 +19,7 @@ on:
       - art/**
       - sounds/**
       - assets/**
+      - updater/**
 
 concurrency:
   group: app-${{ github.ref }}

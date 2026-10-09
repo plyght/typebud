@@ -1,17 +1,25 @@
 name: Release
 
-# Builds typebud for macOS (universal), Windows and Linux, writes and signs the
-# update manifest, and publishes a GitHub Release that the in-app updater
-# (updater/) consumes. See docs/UPDATES.md.
+# Builds typebud for macOS (universal), Windows (x86_64) and Linux (x86_64 tarball +
+# AppImage) and publishes a GitHub Release. See docs/UPDATES.md ("Cutting a release").
 #
-# Required secret:  TYPEBUD_UPDATE_SIGNING_KEY  (from `zig build keygen` in updater/)
-# Optional secrets: MACOS_CERT_P12, MACOS_CERT_PASSWORD, APPLE_ID, APPLE_TEAM_ID,
-#                   APPLE_APP_PASSWORD  (Developer ID signing + notarization;
-#                   without them the macOS build is ad-hoc signed)
+# Automatic updates switch on by themselves once BOTH of these exist (nothing in the
+# repository changes):
+#   variable TYPEBUD_UPDATE_PUBLIC_KEY   public key from `cd updater && zig build keygen`;
+#                                        compiled into the builds (-Dupdate-public-key)
+#   secret   TYPEBUD_UPDATE_SIGNING_KEY  the matching private key; signs manifest.json
+# With both, the release carries manifest.json + manifest.json.sig, verified here
+# exactly as the app verifies it. Without them the builds have no key (they never
+# check for updates) and the release has no manifest; the notes say so. Apps that do
+# have a key ignore releases without a valid signed manifest.
 #
-# zpui is checked out as a plain source tree (actions/checkout with
-# `repository: plyght/zpui`) at a pinned ref. That never triggers zpui's own
-# workflows: they only run on events in the zpui repository itself.
+# Optional secrets: MACOS_CERT_P12, MACOS_CERT_PASSWORD (Developer ID signing; else
+# ad-hoc), plus APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD (notarization).
+#
+# workflow_dispatch with dry_run=true builds and packages everything and uploads the
+# files to the run (artifact "release-dry-run"), without a tag or a release.
+#
+# zpui is fetched at the commit build.zig pins (scripts/fetch-zpui.sh).
 
 on:
   push:
@@ -19,21 +27,29 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version to release, without the leading v (e.g. 0.2.0 or 0.3.0-beta.1)
+        description: Version, without the leading v (e.g. 0.2.0 or 0.3.0-beta.1)
         required: true
-      zpui_ref:
-        description: plyght/zpui ref (tag or commit SHA) to build against
+      dry_run:
+        description: Build and upload the files to this run only (no tag, no release)
+        type: boolean
         required: false
-        default: ""
+        default: true
 
 permissions:
   contents: read
 
 env:
   ZIG_VERSION: 0.17.0
-  # Pin zpui for releases. TODO: replace `main` with a tag or commit SHA so a
-  # release build is reproducible; workflow_dispatch can override it.
-  ZPUI_DEFAULT_REF: main
+  LINUX_DEPS: >-
+    libvulkan-dev mesa-vulkan-drivers glslc
+    libwayland-dev wayland-protocols libxkbcommon-dev libxkbcommon-x11-dev
+    libx11-dev libx11-xcb-dev libxcb1-dev libxcb-xkb-dev libxcursor-dev libxi-dev libxrandr-dev libxext-dev
+    libfreetype-dev libharfbuzz-dev libfontconfig-dev fonts-inter fonts-noto-core fonts-noto-color-emoji
+  # appimagetool and the AppImage runtime, pinned to tagged releases by SHA-256.
+  APPIMAGETOOL_URL: https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+  APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+  APPIMAGE_RUNTIME_URL: https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64
+  APPIMAGE_RUNTIME_SHA256: 2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
 
 concurrency:
   group: release-${{ github.ref }}-${{ inputs.version }}
@@ -48,43 +64,62 @@ jobs:
       tag: ${{ steps.v.outputs.tag }}
       channel: ${{ steps.v.outputs.channel }}
       prerelease: ${{ steps.v.outputs.prerelease }}
-      zpui_ref: ${{ steps.v.outputs.zpui_ref }}
+      dry_run: ${{ steps.v.outputs.dry_run }}
+      updates: ${{ steps.k.outputs.updates }}
+      public_key: ${{ steps.k.outputs.public_key }}
     steps:
       - uses: actions/checkout@v4
       - id: v
-        name: Determine version and channel
+        name: Version and channel
         shell: bash
         env:
           INPUT_VERSION: ${{ inputs.version }}
-          INPUT_ZPUI_REF: ${{ inputs.zpui_ref }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
-          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
-            version="${GITHUB_REF_NAME#v}"
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            version="${GITHUB_REF_NAME#v}"; dry_run=false
           else
-            version="${INPUT_VERSION#v}"
+            version="${INPUT_VERSION#v}"; dry_run="${INPUT_DRY_RUN:-false}"
           fi
           if ! [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "::error::'$version' is not a semantic version (expected X.Y.Z or X.Y.Z-pre)"; exit 1
           fi
           if [[ "$version" == *-* ]]; then channel=beta; prerelease=true; else channel=stable; prerelease=false; fi
-          zpui_ref="${INPUT_ZPUI_REF:-$ZPUI_DEFAULT_REF}"
-          {
-            echo "version=$version"
-            echo "tag=v$version"
-            echo "channel=$channel"
-            echo "prerelease=$prerelease"
-            echo "zpui_ref=$zpui_ref"
-          } >> "$GITHUB_OUTPUT"
-          echo "Releasing typebud $version ($channel) against zpui@$zpui_ref"
-      - name: Refuse to release with the placeholder update key
-        shell: bash
-        run: |
-          if grep -q 'public_key_hex = "0000000000000000000000000000000000000000000000000000000000000000"' updater/src/release_key.zig; then
-            echo "::error::updater/src/release_key.zig still holds the placeholder key. Run 'zig build keygen' in updater/ (see docs/UPDATES.md)."; exit 1
+          # A real release must match the version in build.zig.zon.
+          zon_version="$(sed -n 's/^ *\.version = "\(.*\)",$/\1/p' build.zig.zon | head -n1)"
+          if [[ "$dry_run" != "true" && "${version%%-*}" != "$zon_version" ]]; then
+            echo "::error::version $version doesn't match build.zig.zon ($zon_version)"; exit 1
           fi
-      # TODO(app): once the app's build.zig embeds a version (e.g. from build.zig.zon),
-      # fail here if it doesn't equal ${{ steps.v.outputs.version }}.
+          {
+            echo "version=$version"; echo "tag=v$version"; echo "channel=$channel"
+            echo "prerelease=$prerelease"; echo "dry_run=$dry_run"
+          } >> "$GITHUB_OUTPUT"
+          echo "typebud $version ($channel), dry run: $dry_run, zpui $(sed -n 's/^pub const zpui_commit = "\(.*\)";/\1/p' build.zig)"
+      - id: k
+        name: Update key configured?
+        shell: bash
+        env:
+          PUBLIC_KEY: ${{ vars.TYPEBUD_UPDATE_PUBLIC_KEY }}
+          HAS_SIGNING_KEY: ${{ secrets.TYPEBUD_UPDATE_SIGNING_KEY != '' }}
+        run: |
+          set -euo pipefail
+          pk="$(printf '%s' "$PUBLIC_KEY" | tr -d ' \t\r\n' | tr 'A-F' 'a-f')"
+          if [[ -n "$pk" && ! "$pk" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::variable TYPEBUD_UPDATE_PUBLIC_KEY must be 64 hex characters"; exit 1
+          fi
+          if [[ -n "$pk" && "$HAS_SIGNING_KEY" == "true" ]]; then
+            echo "updates=true" >> "$GITHUB_OUTPUT"
+            echo "public_key=$pk" >> "$GITHUB_OUTPUT"
+            echo "Automatic updates: on (public key $pk)"
+          else
+            # Builds only get a key when the release will also be signed with it.
+            echo "updates=false" >> "$GITHUB_OUTPUT"
+            echo "public_key=" >> "$GITHUB_OUTPUT"
+            [[ -n "$pk" ]] && echo "::warning::TYPEBUD_UPDATE_PUBLIC_KEY is set but secret TYPEBUD_UPDATE_SIGNING_KEY is not: building without updates."
+            [[ -z "$pk" && "$HAS_SIGNING_KEY" == "true" ]] && echo "::warning::secret TYPEBUD_UPDATE_SIGNING_KEY is set but variable TYPEBUD_UPDATE_PUBLIC_KEY is not: building without updates."
+            echo "::notice::Automatic updates not enabled for this build (see docs/UPDATES.md, 'Enabling updates')."
+          fi
 
   updater-tests:
     name: Updater tests
@@ -104,18 +139,16 @@ jobs:
   build-macos:
     name: macOS (universal)
     needs: meta
-    runs-on: macos-14
+    runs-on: macos-15
     env:
       VERSION: ${{ needs.meta.outputs.version }}
+      UPDATE_PUBLIC_KEY: ${{ needs.meta.outputs.public_key }}
       HAS_DEVELOPER_ID: ${{ secrets.MACOS_CERT_P12 != '' && secrets.MACOS_CERT_PASSWORD != '' }}
       HAS_NOTARY: ${{ secrets.APPLE_ID != '' && secrets.APPLE_TEAM_ID != '' && secrets.APPLE_APP_PASSWORD != '' }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
-        with:
-          repository: plyght/zpui
-          ref: ${{ needs.meta.outputs.zpui_ref }}
-          path: zpui
+      - name: zpui (pinned)
+        run: scripts/fetch-zpui.sh
       - uses: mlugg/setup-zig@v2
         with:
           version: ${{ env.ZIG_VERSION }}
@@ -123,27 +156,27 @@ jobs:
       - name: Build aarch64 + x86_64
         run: |
           set -euo pipefail
-          zig build -Doptimize=ReleaseFast -Dtarget=aarch64-macos --prefix out/aarch64
-          zig build -Doptimize=ReleaseFast -Dtarget=x86_64-macos  --prefix out/x86_64
+          for arch in aarch64 x86_64; do
+            zig build -Doptimize=ReleaseFast -Dtarget=$arch-macos -Dversion="$VERSION" \
+              -Dupdate-public-key="$UPDATE_PUBLIC_KEY" --prefix out/$arch --summary all
+          done
 
       - name: Universal binary (lipo)
         run: |
           set -euo pipefail
           mkdir -p out/universal
-          # TODO(app): adjust if the app's install step names the executable differently.
           lipo -create out/aarch64/bin/typebud out/x86_64/bin/typebud -output out/universal/typebud
           lipo -info out/universal/typebud
 
       - name: Package Typebud.app
         run: |
           set -euo pipefail
-          # TODO(app): implement `zig build package` in the app's build.zig. Contract:
-          #   inputs : -Dversion=<semver>  -Dmacos-exe=<path to universal executable>
-          #   output : <prefix>/Typebud.app  (Contents/MacOS/typebud, Contents/Info.plist with
-          #            CFBundleShortVersionString/CFBundleVersion = version, Resources/...)
-          zig build package -Doptimize=ReleaseFast -Dversion="$VERSION" \
-            -Dmacos-exe="$PWD/out/universal/typebud" --prefix out/pkg
-          test -d out/pkg/Typebud.app
+          zig build package -Doptimize=ReleaseFast -Dversion="$VERSION" -Dupdate-public-key="$UPDATE_PUBLIC_KEY" \
+            -Dmacos-exe="$PWD/out/universal/typebud" --prefix out/pkg --summary all
+          plutil -lint out/pkg/Typebud.app/Contents/Info.plist
+          test "$(plutil -extract CFBundleShortVersionString raw out/pkg/Typebud.app/Contents/Info.plist)" = "$VERSION"
+          test "$(plutil -extract LSUIElement raw out/pkg/Typebud.app/Contents/Info.plist)" = "true"
+          out/pkg/Typebud.app/Contents/MacOS/typebud --version
 
       - name: Import Developer ID certificate
         if: env.HAS_DEVELOPER_ID == 'true'
@@ -170,7 +203,6 @@ jobs:
         if: env.HAS_DEVELOPER_ID == 'true'
         run: |
           set -euo pipefail
-          # TODO(app): add --entitlements <file> if the app needs any.
           codesign --force --deep --options runtime --timestamp --sign "$CODESIGN_IDENTITY" out/pkg/Typebud.app
           codesign --verify --deep --strict --verbose=2 out/pkg/Typebud.app
 
@@ -178,7 +210,7 @@ jobs:
         if: env.HAS_DEVELOPER_ID != 'true'
         run: |
           set -euo pipefail
-          echo "::warning::MACOS_CERT_P12/MACOS_CERT_PASSWORD not set: ad-hoc signing. Users will need to right-click > Open on first launch and re-grant Input Monitoring/Accessibility after each update."
+          echo "::notice::No Developer ID secrets: ad-hoc signing. Users open it with right-click > Open the first time."
           codesign --force --deep --sign - out/pkg/Typebud.app
           codesign --verify --deep --strict out/pkg/Typebud.app
 
@@ -203,10 +235,6 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent out/pkg/Typebud.app dist/typebud-macos-universal.zip
           spctl --assess --type execute --verbose out/pkg/Typebud.app
 
-      - name: Notarization skipped
-        if: env.HAS_DEVELOPER_ID != 'true' || env.HAS_NOTARY != 'true'
-        run: echo "::notice::Notarization skipped (needs MACOS_CERT_P12, MACOS_CERT_PASSWORD, APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD)."
-
       - name: Clean up keychain
         if: always() && env.HAS_DEVELOPER_ID == 'true'
         run: security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true
@@ -218,57 +246,38 @@ jobs:
           if-no-files-found: error
 
   build-windows:
-    name: Windows (${{ matrix.arch }})
+    name: Windows (x86_64)
     needs: meta
     runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x86_64
-            optional: false
-          # Cross-compiled from the x86_64 runner; not run in CI. Optional:
-          # a failure here doesn't block the release (the updater falls back to
-          # the x86_64 build on Windows on Arm).
-          - arch: aarch64
-            optional: true
-    continue-on-error: ${{ matrix.optional }}
     env:
       VERSION: ${{ needs.meta.outputs.version }}
+      UPDATE_PUBLIC_KEY: ${{ needs.meta.outputs.public_key }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
-        with:
-          repository: plyght/zpui
-          ref: ${{ needs.meta.outputs.zpui_ref }}
-          path: zpui
+      - name: zpui (pinned)
+        run: scripts/fetch-zpui.sh
       - uses: mlugg/setup-zig@v2
         with:
           version: ${{ env.ZIG_VERSION }}
-      - name: Build
-        shell: bash
-        run: zig build -Doptimize=ReleaseFast -Dtarget=${{ matrix.arch }}-windows-gnu
-      - name: Package
-        shell: bash
+      - name: Build and package
         run: |
           set -euo pipefail
-          # TODO(app): implement `zig build package`. Contract:
-          #   inputs : -Dversion=<semver> -Dtarget=<arch>-windows-gnu
-          #   output : <prefix>/typebud/ containing typebud.exe and everything it needs
-          #            (portable; installed per-user to %LOCALAPPDATA%\Programs\typebud)
-          zig build package -Doptimize=ReleaseFast -Dtarget=${{ matrix.arch }}-windows-gnu \
-            -Dversion="$VERSION" --prefix out/pkg
+          zig build package -Doptimize=ReleaseFast -Dtarget=x86_64-windows-gnu -Dversion="$VERSION" \
+            -Dupdate-public-key="$UPDATE_PUBLIC_KEY" --prefix out/pkg --summary all
           test -f out/pkg/typebud/typebud.exe
       - name: Zip (files at the archive root)
-        shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
-          (cd out/pkg/typebud && 7z a -tzip -mx=9 "$GITHUB_WORKSPACE/dist/typebud-windows-${{ matrix.arch }}.zip" .)
+          (cd out/pkg/typebud && 7z a -tzip -mx=9 "$GITHUB_WORKSPACE/dist/typebud-windows-x86_64.zip" typebud.exe)
+          7z l dist/typebud-windows-x86_64.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: dist-windows-${{ matrix.arch }}
-          path: dist/typebud-windows-${{ matrix.arch }}.zip
+          name: dist-windows-x86_64
+          path: dist/typebud-windows-x86_64.zip
           if-no-files-found: error
 
   build-linux:
@@ -277,49 +286,62 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       VERSION: ${{ needs.meta.outputs.version }}
+      UPDATE_PUBLIC_KEY: ${{ needs.meta.outputs.public_key }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
-        with:
-          repository: plyght/zpui
-          ref: ${{ needs.meta.outputs.zpui_ref }}
-          path: zpui
+      - name: zpui (pinned)
+        run: scripts/fetch-zpui.sh
       - uses: mlugg/setup-zig@v2
         with:
           version: ${{ env.ZIG_VERSION }}
-      - name: Build
-        # TODO(app): if zpui's Linux backend links system libraries, install their
-        # -dev packages here (apt-get) before building.
-        run: zig build -Doptimize=ReleaseFast -Dtarget=x86_64-linux-gnu.2.31
-      - name: Package
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $LINUX_DEPS
+      - name: Build and package
         run: |
           set -euo pipefail
-          # TODO(app): implement `zig build package`. Contract:
-          #   inputs : -Dversion=<semver> -Dtarget=x86_64-linux-gnu.2.31
-          #   outputs: <prefix>/typebud-linux-x86_64/   tarball root: `typebud` executable + resources
-          #            <prefix>/AppDir/                 AppDir: AppRun, typebud.desktop, typebud.png, usr/...
-          zig build package -Doptimize=ReleaseFast -Dtarget=x86_64-linux-gnu.2.31 \
-            -Dversion="$VERSION" --prefix out/pkg
+          zig build package -Doptimize=ReleaseFast -Dversion="$VERSION" \
+            -Dupdate-public-key="$UPDATE_PUBLIC_KEY" --prefix out/pkg --summary all
           test -x out/pkg/typebud-linux-x86_64/typebud
-          test -d out/pkg/AppDir
-          # The updater only ever replaces a directory that carries this marker.
-          touch out/pkg/typebud-linux-x86_64/.typebud-install
+          test -f out/pkg/typebud-linux-x86_64/.typebud-install
+          test -f out/pkg/typebud-linux-x86_64/typebud.desktop
+          test -x out/pkg/AppDir/AppRun
+          out/pkg/typebud-linux-x86_64/typebud --version
       - name: Tarball
         run: |
           set -euo pipefail
           mkdir -p dist
           tar -C out/pkg --owner=0 --group=0 -czf dist/typebud-linux-x86_64.tar.gz typebud-linux-x86_64
-      - name: AppImage
+          tar -tzf dist/typebud-linux-x86_64.tar.gz
+      - name: Fetch appimagetool + runtime (pinned, checksummed)
         env:
-          # TODO: pin appimagetool to a tagged release and check its sha256.
-          APPIMAGETOOL_URL: https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          curl -fsSL -o "$RUNNER_TEMP/appimagetool" "$APPIMAGETOOL_URL"
+          fetch() { # url sha256 dest
+            curl -fsSL --retry 3 -o "$3" "$1"
+            echo "$2  $3" | sha256sum -c -
+          }
+          fetch "$APPIMAGETOOL_URL" "$APPIMAGETOOL_SHA256" "$RUNNER_TEMP/appimagetool"
+          fetch "$APPIMAGE_RUNTIME_URL" "$APPIMAGE_RUNTIME_SHA256" "$RUNNER_TEMP/runtime-x86_64"
+          # Cross-check against the digests GitHub recorded when the assets were uploaded.
+          check_digest() { # repo tag asset sha256
+            d="$(gh api "repos/$1/releases/tags/$2" --jq ".assets[] | select(.name == \"$3\") | .digest" || true)"
+            if [[ -z "$d" || "$d" == "null" ]]; then echo "::notice::no GitHub digest for $1 $2 $3"; return 0; fi
+            [[ "$d" == "sha256:$4" ]] || { echo "::error::$1 $2 $3: GitHub digest $d != pinned $4"; exit 1; }
+            echo "GitHub digest matches for $3"
+          }
+          check_digest AppImage/appimagetool 1.9.1 appimagetool-x86_64.AppImage "$APPIMAGETOOL_SHA256"
+          check_digest AppImage/type2-runtime 20251108 runtime-x86_64 "$APPIMAGE_RUNTIME_SHA256"
           chmod +x "$RUNNER_TEMP/appimagetool"
+      - name: AppImage
+        run: |
+          set -euo pipefail
           ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$RUNNER_TEMP/appimagetool" --no-appstream \
-            out/pkg/AppDir dist/typebud-linux-x86_64.AppImage
+            --runtime-file "$RUNNER_TEMP/runtime-x86_64" out/pkg/AppDir dist/typebud-linux-x86_64.AppImage
           chmod +x dist/typebud-linux-x86_64.AppImage
+          APPIMAGE_EXTRACT_AND_RUN=1 dist/typebud-linux-x86_64.AppImage --version
       - uses: actions/upload-artifact@v4
         with:
           name: dist-linux-x86_64
@@ -329,7 +351,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    name: Sign manifest and publish
+    name: ${{ needs.meta.outputs.dry_run == 'true' && 'Assemble (dry run)' || 'Publish release' }}
     needs: [meta, updater-tests, build-macos, build-windows, build-linux]
     runs-on: ubuntu-latest
     permissions:
@@ -339,49 +361,88 @@ jobs:
       TAG: ${{ needs.meta.outputs.tag }}
       CHANNEL: ${{ needs.meta.outputs.channel }}
       PRERELEASE: ${{ needs.meta.outputs.prerelease }}
+      DRY_RUN: ${{ needs.meta.outputs.dry_run }}
+      UPDATES: ${{ needs.meta.outputs.updates }}
+      UPDATE_PUBLIC_KEY: ${{ needs.meta.outputs.public_key }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v2
         with:
           version: ${{ env.ZIG_VERSION }}
-      - name: Build release tools
-        working-directory: updater
-        run: zig build -Doptimize=ReleaseSafe
-
       - uses: actions/download-artifact@v4
         with:
           pattern: dist-*
           path: dist
           merge-multiple: true
-
-      - name: Write manifest.json (sizes + sha256)
+      - name: Check the four artifacts
         run: |
           set -euo pipefail
+          for f in typebud-macos-universal.zip typebud-windows-x86_64.zip typebud-linux-x86_64.tar.gz typebud-linux-x86_64.AppImage; do
+            test -s "dist/$f" || { echo "::error::missing dist/$f"; exit 1; }
+          done
           ls -l dist
+
+      - name: Build release tools
+        if: env.UPDATES == 'true'
+        working-directory: updater
+        run: zig build -Doptimize=ReleaseSafe -Dpublic-key="$UPDATE_PUBLIC_KEY"
+      - name: Write manifest.json (sizes + sha256)
+        if: env.UPDATES == 'true'
+        run: |
+          set -euo pipefail
           updater/zig-out/bin/typebud-mkmanifest --version "$VERSION" --channel "$CHANNEL" -o dist/manifest.json dist/typebud-*
           cat dist/manifest.json
-
       - name: Sign manifest.json
+        if: env.UPDATES == 'true'
         env:
           TYPEBUD_UPDATE_SIGNING_KEY: ${{ secrets.TYPEBUD_UPDATE_SIGNING_KEY }}
         run: |
           set -euo pipefail
-          if [[ -z "$TYPEBUD_UPDATE_SIGNING_KEY" ]]; then
-            echo "::error::secret TYPEBUD_UPDATE_SIGNING_KEY is not set (see docs/UPDATES.md)"; exit 1
-          fi
-          # Refuses if the key doesn't match updater/src/release_key.zig.
-          updater/zig-out/bin/typebud-sign dist/manifest.json -o dist/manifest.json.sig
-
+          # Refuses unless the private key's public half is the key the builds carry.
+          updater/zig-out/bin/typebud-sign dist/manifest.json -o dist/manifest.json.sig \
+            --expect-public-key "$UPDATE_PUBLIC_KEY"
       - name: Verify exactly as the app will
+        if: env.UPDATES == 'true'
         run: |
           set -euo pipefail
-          updater/zig-out/bin/typebud-update-check verify \
+          updater/zig-out/bin/typebud-update-check verify --public-key "$UPDATE_PUBLIC_KEY" \
             --manifest dist/manifest.json --sig dist/manifest.json.sig \
             --artifacts dist --expect-version "$VERSION"
-          (cd dist && sha256sum typebud-* manifest.json manifest.json.sig > SHA256SUMS.txt)
+
+      - name: Release notes and checksums
+        run: |
+          set -euo pipefail
+          (cd dist && sha256sum typebud-* $( [[ "$UPDATES" == "true" ]] && echo manifest.json manifest.json.sig ) > SHA256SUMS.txt)
+          cat dist/SHA256SUMS.txt
+          {
+            if [[ "$UPDATES" == "true" ]]; then
+              echo "Signed update manifest included: installed copies update themselves."
+            else
+              echo "**Automatic updates not enabled for this build.** This release has no signed update manifest, so typebud can't update itself to or from it: download it from this page."
+            fi
+            echo
+            echo "| Platform | File |"
+            echo "| --- | --- |"
+            echo "| macOS 12+ (Apple silicon + Intel) | \`typebud-macos-universal.zip\` |"
+            echo "| Windows 10/11 x64 (portable) | \`typebud-windows-x86_64.zip\` |"
+            echo "| Linux x86_64 | \`typebud-linux-x86_64.AppImage\` or \`typebud-linux-x86_64.tar.gz\` |"
+            echo
+            echo "Checksums: \`SHA256SUMS.txt\`."
+          } > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+          cp "$RUNNER_TEMP/notes.md" dist/RELEASE_NOTES.md
+
+      - name: Upload (dry run)
+        if: env.DRY_RUN == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dry-run
+          path: dist/
+          if-no-files-found: error
 
       - name: Create GitHub Release (draft, then publish)
+        if: env.DRY_RUN != 'true'
         run: |
           set -euo pipefail
           flags=()
@@ -391,19 +452,24 @@ jobs:
           else
             flags+=(--target "$GITHUB_SHA")
           fi
-          # Upload everything to a draft first: drafts are invisible to the
-          # updater, so clients never see a release with missing assets.
-          gh release create "$TAG" --draft --title "typebud $VERSION" --generate-notes "${flags[@]}" \
-            dist/typebud-* dist/manifest.json dist/manifest.json.sig dist/SHA256SUMS.txt
+          files=(dist/typebud-* dist/SHA256SUMS.txt)
+          [[ "$UPDATES" == "true" ]] && files+=(dist/manifest.json dist/manifest.json.sig)
+          # Upload everything to a draft first: drafts are invisible to the updater,
+          # so clients never see a release with missing assets.
+          gh release create "$TAG" --draft --title "typebud $VERSION" --notes-file "$RUNNER_TEMP/notes.md" \
+            --generate-notes "${flags[@]}" "${files[@]}"
           gh release edit "$TAG" --draft=false
+          gh release view "$TAG" --json url,assets --jq '.url, (.assets[].name)'
 
   smoke:
     name: Post-release update check
     needs: [meta, release]
+    if: needs.meta.outputs.updates == 'true' && needs.meta.outputs.dry_run != 'true'
     runs-on: ubuntu-latest
     env:
       VERSION: ${{ needs.meta.outputs.version }}
       CHANNEL: ${{ needs.meta.outputs.channel }}
+      UPDATE_PUBLIC_KEY: ${{ needs.meta.outputs.public_key }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
@@ -414,7 +480,7 @@ jobs:
         working-directory: updater
         run: |
           set -euo pipefail
-          zig build -Doptimize=ReleaseSafe
+          zig build -Doptimize=ReleaseSafe -Dpublic-key="$UPDATE_PUBLIC_KEY"
           ./zig-out/bin/typebud-update-check check --current 0.0.0 --channel "$CHANNEL" \
             --expect-version "$VERSION" --platform linux-x86_64-tarball --download \
             --token-env GH_TOKEN --work-dir "$RUNNER_TEMP/update-check"
