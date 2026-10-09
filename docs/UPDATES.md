@@ -353,7 +353,7 @@ All five give signing, notarization and stapling.
    2. runs the updater tests and cross-compiles them for every target.
    3. fetches zpui at the commit `build.zig` pins (`scripts/fetch-zpui.sh`) and runs
       `zig build package -Doptimize=ReleaseFast -Dversion=<version>` per platform:
-      macOS aarch64 + x86_64 combined with `lipo` and packaged with `-Dmacos-exe`
+      macOS arm64 + x86_64 combined with `lipo` (`-Duniversal=true`)
       (`Typebud.app`, ad-hoc signed, or Developer ID + notarized when those secrets
       exist), Windows x86_64 (portable zip), Linux x86_64 (tarball with the
       `.typebud-install` marker, and an AppImage built with appimagetool 1.9.1 and

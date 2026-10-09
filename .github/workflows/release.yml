@@ -153,30 +153,21 @@ jobs:
         with:
           version: ${{ env.ZIG_VERSION }}
 
-      - name: Build aarch64 + x86_64
+      - name: Build and package Typebud.app (universal)
         run: |
           set -euo pipefail
-          for arch in aarch64 x86_64; do
-            zig build -Doptimize=ReleaseFast -Dtarget=$arch-macos -Dversion="$VERSION" \
-              -Dupdate-public-key="$UPDATE_PUBLIC_KEY" --prefix out/$arch --summary all
-          done
-
-      - name: Universal binary (lipo)
-        run: |
-          set -euo pipefail
-          mkdir -p out/universal
-          lipo -create out/aarch64/bin/typebud out/x86_64/bin/typebud -output out/universal/typebud
-          lipo -info out/universal/typebud
-
-      - name: Package Typebud.app
-        run: |
-          set -euo pipefail
-          zig build package -Doptimize=ReleaseFast -Dversion="$VERSION" -Dupdate-public-key="$UPDATE_PUBLIC_KEY" \
-            -Dmacos-exe="$PWD/out/universal/typebud" --prefix out/pkg --summary all
+          # Native build + the x86_64 slice, combined with lipo by the package step
+          # (-Duniversal). An explicit -Dtarget=*-macos would lose the native SDK
+          # paths, so the other slice comes from the package step instead.
+          zig build package -Doptimize=ReleaseFast -Duniversal=true -Dversion="$VERSION" \
+            -Dupdate-public-key="$UPDATE_PUBLIC_KEY" --prefix out/pkg --summary all
+          exe=out/pkg/Typebud.app/Contents/MacOS/typebud
+          lipo -info "$exe"
+          lipo "$exe" -verify_arch arm64 x86_64
           plutil -lint out/pkg/Typebud.app/Contents/Info.plist
           test "$(plutil -extract CFBundleShortVersionString raw out/pkg/Typebud.app/Contents/Info.plist)" = "$VERSION"
           test "$(plutil -extract LSUIElement raw out/pkg/Typebud.app/Contents/Info.plist)" = "true"
-          out/pkg/Typebud.app/Contents/MacOS/typebud --version
+          "$exe" --version
 
       - name: Import Developer ID certificate
         if: env.HAS_DEVELOPER_ID == 'true'
@@ -283,7 +274,8 @@ jobs:
   build-linux:
     name: Linux (x86_64)
     needs: meta
-    runs-on: ubuntu-22.04
+    # glslc (zpui's shader compiler) is packaged from Ubuntu 24.04 on.
+    runs-on: ubuntu-24.04
     env:
       VERSION: ${{ needs.meta.outputs.version }}
       UPDATE_PUBLIC_KEY: ${{ needs.meta.outputs.public_key }}
@@ -351,7 +343,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    name: ${{ needs.meta.outputs.dry_run == 'true' && 'Assemble (dry run)' || 'Publish release' }}
+    name: Publish release (or assemble, on a dry run)
     needs: [meta, updater-tests, build-macos, build-windows, build-linux]
     runs-on: ubuntu-latest
     permissions:
