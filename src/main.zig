@@ -182,6 +182,7 @@ test {
     _ = @import("visibility.zig");
     _ = @import("pack_import.zig");
     _ = @import("placement.zig");
+    _ = @import("launch_at_login.zig");
     _ = @import("update_hook.zig");
     _ = @import("updates.zig");
 }

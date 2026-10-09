@@ -28,6 +28,7 @@ const settings_view = @import("settings_view.zig");
 const clock = @import("clock.zig");
 const pack_import = @import("pack_import.zig");
 const placement = @import("placement.zig");
+const launch_at_login = @import("launch_at_login.zig");
 
 const App = zpui.App;
 const Window = zpui.Window;
@@ -206,6 +207,8 @@ pub const Typebud = struct {
         self.anchor = .{ .corner = toCorner(self.settings.corner), .margin = .{ .x = self.settings.margin_x, .y = self.settings.margin_y } };
         self.display_id = self.displayIdFor(self.settings.display);
         self.live_size = self.settings.size;
+        // Before the first apply, which never writes the registration.
+        self.syncLaunchAtLogin();
         self.openPetWindow() catch |e| {
             std.log.err("typebud: cannot open the pet window: {t}", .{e});
             app.quit();
@@ -386,11 +389,32 @@ pub const Typebud = struct {
         self.synth_key_up = builtin.os.tag == .macos and !self.settings.precise_input;
     }
 
+    /// The id the login item is registered under (the installers use the same one).
+    const login_item_id = if (builtin.os.tag == .macos) bundle_id else app_id;
+
+    /// The user flipped the switch: register / unregister.
     fn applyLaunchAtLogin(self: *Typebud) void {
         var buf: [std.fs.max_path_bytes]u8 = undefined;
         const n = std.process.executablePath(self.io, &buf) catch return;
-        self.app.setLaunchAtLogin(if (builtin.os.tag == .macos) bundle_id else app_id, buf[0..n], self.settings.launch_at_login) catch |e|
+        self.app.setLaunchAtLogin(login_item_id, buf[0..n], self.settings.launch_at_login) catch |e|
             std.log.warn("launch at login: {t}", .{e});
+    }
+
+    /// Show the OS's real launch-at-login state (an installer or the user may have changed
+    /// it): it replaces the saved setting without writing the registration back. Platforms
+    /// that cannot tell keep the saved setting. Ephemeral (smoke / demo) runs skip it.
+    fn syncLaunchAtLogin(self: *Typebud) void {
+        if (self.options.ephemeral) return;
+        const r = launch_at_login.syncFromOs(self.app, login_item_id, &self.settings.launch_at_login) catch |e| {
+            std.log.warn("launch at login: cannot read the OS state: {t}", .{e});
+            return;
+        };
+        if (r != .updated) return;
+        std.log.info("launch at login is {s} in the OS; following it", .{if (self.settings.launch_at_login) "on" else "off"});
+        // Already the OS's state: `apply` must not see a change to write.
+        if (self.applied) |*a| a.launch_at_login = self.settings.launch_at_login;
+        self.scheduleSave();
+        self.redrawSettings();
     }
 
     pub fn scheduleSave(self: *Typebud) void {
@@ -688,6 +712,7 @@ pub const Typebud = struct {
         // An accessory (LSUIElement) app is never active on its own: bring it forward so
         // the settings window becomes key in front of the app the user was in.
         if (mac) self.app.activate(true);
+        self.syncLaunchAtLogin();
         if (self.settingsWindow()) |w| {
             w.activateWindow();
             return;
