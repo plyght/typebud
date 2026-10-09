@@ -41,7 +41,7 @@ jobs:
         with:
           version: ${{ env.ZIG_VERSION }}
       - name: Package
-        run: zig build package -Doptimize=ReleaseFast -Dversion=${{ env.CI_VERSION }} --prefix out/pkg --summary all
+        run: zig build package -Doptimize=ReleaseFast "-Dversion=$env:CI_VERSION" --prefix out/pkg --summary all
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
       - name: Build the installer
@@ -225,6 +225,7 @@ jobs:
           test -L "$mnt/Applications" && test "$(readlink "$mnt/Applications")" = /Applications
           test -f "$mnt/.DS_Store" && test -f "$mnt/.VolumeIcon.icns" && test -f "$mnt/.background/background.tiff"
           codesign --verify --deep --strict "$mnt/Typebud.app"
+          xattr -px com.apple.FinderInfo "$mnt" || echo "::warning::volume root has no FinderInfo (custom icon flag)"
           "$mnt/Typebud.app/Contents/MacOS/typebud" --version
           mkdir -p shots
           open "$mnt"

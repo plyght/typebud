@@ -78,13 +78,6 @@ mnt=$(echo "$attach" | awk -F'\t' '/Apple_HFS/ {print $NF; exit}')
 [ -n "$dev" ] && [ -d "$mnt" ] || { echo "error: could not mount $rw" >&2; echo "$attach" >&2; exit 1; }
 echo "mounted $dev at $mnt"
 
-# Custom volume icon: set the volume root's kHasCustomIcon Finder flag.
-if command -v SetFile >/dev/null 2>&1; then
-  SetFile -a C "$mnt"
-else
-  xattr -wx com.apple.FinderInfo "0000000000000000040000000000000000000000000000000000000000000000" "$mnt"
-fi
-
 # bounds include the title bar; with the toolbar hidden the content area is win_w x win_h.
 left=200 top=120
 osascript <<APPLESCRIPT
@@ -119,6 +112,20 @@ for _ in $(seq 1 20); do
   sleep 0.5
 done
 [ -f "$mnt/.DS_Store" ] || { echo "error: Finder did not write .DS_Store (window layout missing)" >&2; exit 1; }
+
+# Custom volume icon: set the volume root's kHasCustomIcon Finder flag. After the Finder
+# layout, because Finder rewrites the root folder's FinderInfo when it saves the window.
+if command -v SetFile >/dev/null 2>&1; then
+  SetFile -c icnC "$mnt/.VolumeIcon.icns" || true
+  SetFile -a C "$mnt"
+else
+  info=$(xattr -px com.apple.FinderInfo "$mnt" 2>/dev/null | tr -d ' \n' || true)
+  [ ${#info} -eq 64 ] || info=$(printf '%064d' 0)
+  # byte 8 of the flags field: 0x04 = kHasCustomIcon (0x0400)
+  b8=$(( 0x${info:16:2} | 0x04 ))
+  xattr -wx com.apple.FinderInfo "${info:0:16}$(printf '%02x' $b8)${info:18}" "$mnt"
+fi
+echo "volume root FinderInfo: $(xattr -px com.apple.FinderInfo "$mnt" 2>/dev/null | tr -d '\n')"
 
 # 4. Tidy, flush, detach.
 rm -rf "$mnt/.fseventsd" "$mnt/.Trashes" 2>/dev/null || true
