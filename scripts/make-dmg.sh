@@ -52,6 +52,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Set kHasCustomIcon (FinderInfo flags 0x0400) on a folder / volume root, keeping other bits.
+set_custom_icon_flag() {
+  if command -v SetFile >/dev/null 2>&1; then
+    SetFile -a C "$1"
+    return
+  fi
+  local info b8
+  info=$(xattr -px com.apple.FinderInfo "$1" 2>/dev/null | tr -d ' \n' || true)
+  [ ${#info} -eq 64 ] || info=$(printf '%064d' 0)
+  b8=$(( 0x${info:16:2} | 0x04 ))
+  xattr -wx com.apple.FinderInfo "${info:0:16}$(printf '%02x' $b8)${info:18}" "$1"
+}
+
 # 1. Staging folder.
 stage=$work/stage
 mkdir -p "$stage/.background"
@@ -59,6 +72,9 @@ ditto "$app" "$stage/$app_name"
 ln -s /Applications "$stage/Applications"
 tiffutil -cathidpicheck "$bg1" "$bg2" -out "$stage/.background/background.tiff" >/dev/null
 cp "$app/Contents/Resources/typebud.icns" "$stage/.VolumeIcon.icns"
+# hdiutil carries the source folder's Finder flags to the volume root, so the very first mount
+# (and anything Finder caches about it) already has the custom icon.
+set_custom_icon_flag "$stage"
 
 # 2. Writable image, sized to the content plus headroom.
 size_mb=$(( $(du -sm "$stage" | cut -f1) + 32 ))
@@ -113,18 +129,9 @@ for _ in $(seq 1 20); do
 done
 [ -f "$mnt/.DS_Store" ] || { echo "error: Finder did not write .DS_Store (window layout missing)" >&2; exit 1; }
 
-# Custom volume icon: set the volume root's kHasCustomIcon Finder flag. After the Finder
-# layout, because Finder rewrites the root folder's FinderInfo when it saves the window.
-if command -v SetFile >/dev/null 2>&1; then
-  SetFile -c icnC "$mnt/.VolumeIcon.icns" || true
-  SetFile -a C "$mnt"
-else
-  info=$(xattr -px com.apple.FinderInfo "$mnt" 2>/dev/null | tr -d ' \n' || true)
-  [ ${#info} -eq 64 ] || info=$(printf '%064d' 0)
-  # byte 8 of the flags field: 0x04 = kHasCustomIcon (0x0400)
-  b8=$(( 0x${info:16:2} | 0x04 ))
-  xattr -wx com.apple.FinderInfo "${info:0:16}$(printf '%02x' $b8)${info:18}" "$mnt"
-fi
+# Set the volume icon flag again: Finder rewrites the root folder's FinderInfo when it saves
+# the window layout.
+set_custom_icon_flag "$mnt"
 echo "volume root FinderInfo: $(xattr -px com.apple.FinderInfo "$mnt" 2>/dev/null | tr -d '\n')"
 
 # 4. Tidy, flush, detach.

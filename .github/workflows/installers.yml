@@ -217,6 +217,10 @@ jobs:
           set -x
           dmg="${{ steps.dmg.outputs.dmg }}"
           hdiutil imageinfo "$dmg" | grep -E '^Format:|Format Description' || true
+          # make-dmg mounted a writable copy of this volume; start Finder fresh so it reads the
+          # final image the way a user's Mac would.
+          killall Finder || true
+          sleep 3
           attach=$(hdiutil attach -noautoopen "$dmg")
           echo "$attach"
           mnt=$(echo "$attach" | awk -F'\t' '/Apple_HFS/ {print $NF; exit}')
@@ -239,6 +243,14 @@ jobs:
             print(w[kCGWindowNumber as String] as! Int); break
           }
           SWIFT
+          cat > volicon.swift <<'SWIFT'
+          import AppKit
+          let img = NSWorkspace.shared.icon(forFile: CommandLine.arguments[1])
+          img.size = NSSize(width: 256, height: 256)
+          let rep = NSBitmapImageRep(data: img.tiffRepresentation!)!
+          try! rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: CommandLine.arguments[2]))
+          SWIFT
+          swift volicon.swift "$mnt" shots/volume-icon.png || true
           wid=$(swift winid.swift 2>/dev/null || true)
           echo "window id: ${wid:-none}"
           if [ -n "$wid" ]; then screencapture -x -o -l"$wid" shots/dmg-window.png; fi
