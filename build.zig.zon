@@ -8,6 +8,8 @@
         // (scripts/fetch-zpui.sh). A path dependency because zpui's package manifest only
         // lists src/, while its build.zig also needs vendor/ (lunasvg, stb).
         .zpui = .{ .path = "zpui" },
+        // The over-the-air updater (its own package; docs/UPDATES.md).
+        .updater = .{ .path = "updater" },
     },
-    .paths = .{ "build.zig", "build.zig.zon", "src", "tools", "third_party", "art", "sounds", "assets", "packaging" },
+    .paths = .{ "build.zig", "build.zig.zon", "src", "tools", "third_party", "art", "sounds", "assets", "packaging", "updater" },
 }

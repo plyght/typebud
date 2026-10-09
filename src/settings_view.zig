@@ -471,7 +471,7 @@ pub const SettingsView = struct {
         const s = &tb.settings;
         var ub: [128]u8 = undefined;
         const ustatus = zpui.fmt("{s}", .{update_hook.statusText(&ub)});
-        const check_row = div().flex().flexRow().itemsCenter().gap(px(8)).child(button(look, "check", "Check Now", true, cx.listener(SettingsView.onCheckNow)));
+        const check_row = div().flex().flexRow().itemsCenter().gap(px(8)).child(button(look, "check", update_hook.actionLabel(), true, cx.listener(SettingsView.onCheckNow)));
         const general = [_]prefs.Row{
             prefs.row("Launch at Login", "Start typebud when you log in", sw("login", s.launch_at_login, "Launch at Login", cx, .launch_at_login)),
         };
@@ -495,9 +495,12 @@ pub const SettingsView = struct {
         return prefs.page(window, look, &.{
             .{ .title = "General", .rows = &general },
             .{ .title = "Typing", .rows = typing },
-            .{ .title = "Updates", .rows = &.{
+            .{ .title = "Updates", .rows = if (update_hook.enabled()) &.{
                 prefs.row("Check Automatically", ustatus, sw("autoupdate", s.auto_update, "Check for Updates Automatically", cx, .auto_update)),
                 prefs.row("Check for Updates", zpui.fmt("typebud {s}", .{build_options.version}), check_row),
+            } else &.{
+                // No update key in this build: no checks, just the releases page.
+                prefs.row(zpui.fmt("typebud {s}", .{build_options.version}), ustatus, check_row),
             } },
         });
     }
@@ -592,7 +595,7 @@ pub const SettingsView = struct {
         app_mod.instance.importPack();
     }
     fn onCheckNow(_: *SettingsView, _: *const zpui.ClickEvent, cx: *Context(SettingsView)) void {
-        update_hook.checkNow(true);
+        update_hook.runAction();
         cx.notify();
     }
 };

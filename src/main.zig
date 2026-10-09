@@ -14,6 +14,8 @@ const app_mod = @import("app.zig");
 const clock = @import("clock.zig");
 const smoke = @import("smoke.zig");
 const demo = @import("demo.zig");
+const updates_mod = @import("updates.zig");
+const update_hook = @import("update_hook.zig");
 
 pub const std_options: std.Options = .{ .log_level = .info };
 
@@ -26,8 +28,53 @@ const Launch = struct {
     mode: Mode,
     open_settings: bool,
     tb: ?*app_mod.Typebud = null,
+    updates: ?*updates_mod.Updates = null,
+    app: ?*zpui.App = null,
     exit_code: u8 = 0,
+
+    fn openUrl(ctx: ?*anyopaque, url: []const u8) void {
+        const l: *Launch = @ptrCast(@alignCast(ctx.?));
+        const p = (l.app orelse return).platform;
+        p.vtable.openUrl(p.ptr, url);
+    }
+    fn updatesChanged(ctx: ?*anyopaque) void {
+        const l: *Launch = @ptrCast(@alignCast(ctx.?));
+        if (l.tb) |tb| tb.redrawSettings();
+    }
+    fn showUpdates(ctx: ?*anyopaque) void {
+        const l: *Launch = @ptrCast(@alignCast(ctx.?));
+        const tb = l.tb orelse return;
+        tb.settings_section = .system;
+        tb.openSettings();
+    }
+    fn quitForUpdate(ctx: ?*anyopaque) void {
+        const l: *Launch = @ptrCast(@alignCast(ctx.?));
+        if (l.app) |app| app.quit(); // main() then saves settings (tb.destroy)
+    }
 };
+
+/// The updater, or (no key compiled in / scripted runs) its "updates off" stand-in.
+fn startUpdates(l: *Launch, app: *zpui.App) void {
+    const scripted = l.mode != .normal;
+    const up = updates_mod.Updates.create(l.gpa, l.io, .{
+        .dispatcher = app.platform.dispatcher(),
+        .ctx = l,
+        .open_url = Launch.openUrl,
+        .changed = Launch.updatesChanged,
+        .show = Launch.showUpdates,
+        .quit = Launch.quitForUpdate,
+    }, .{
+        .current_version = @import("build_options").version,
+        // Scripted runs (CI smoke / demo) never touch the network.
+        .public_key = if (scripted) null else @import("updater").release_key.public_key,
+        .environ_map = l.env,
+    }) catch |e| {
+        std.log.warn("updates: {t}", .{e});
+        return;
+    };
+    l.updates = up;
+    update_hook.install(up.hook());
+}
 
 fn onLaunch(l: *Launch, app: *zpui.App) void {
     const scripted = l.mode != .normal;
@@ -43,6 +90,8 @@ fn onLaunch(l: *Launch, app: *zpui.App) void {
         return;
     };
     l.tb = tb;
+    l.app = app;
+    startUpdates(l, app);
     switch (l.mode) {
         .normal => tb.launch(),
         .smoke => smoke.start(tb, &l.exit_code),
@@ -112,6 +161,11 @@ pub fn main(init: std.process.Init) !void {
     var l: Launch = .{ .gpa = gpa, .io = init.io, .env = env, .mode = mode, .open_settings = open_settings };
     app.run(&l, onLaunch);
     if (l.tb) |tb| tb.destroy();
+    if (l.updates) |up| {
+        up.onQuit(); // installs a downloaded update
+        update_hook.install(null);
+        up.destroy();
+    }
     if (l.exit_code != 0) std.process.exit(l.exit_code);
     // Windows may still hold platform resources; process exit cleans up.
     std.process.exit(0);
@@ -128,4 +182,6 @@ test {
     _ = @import("visibility.zig");
     _ = @import("pack_import.zig");
     _ = @import("placement.zig");
+    _ = @import("update_hook.zig");
+    _ = @import("updates.zig");
 }

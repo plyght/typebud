@@ -9,6 +9,10 @@
 //!
 //! zpui (github.com/plyght/zpui) is a path dependency at ./zpui: run scripts/fetch-zpui.sh
 //! once (it clones the pinned commit), or symlink an existing checkout there.
+//!
+//! Updates: -Dupdate-public-key=<64 hex> compiles in the Ed25519 key release manifests
+//! are signed with, which turns on automatic updates (docs/UPDATES.md). Without it (the
+//! default) the app never checks for updates and links to the releases page instead.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -19,6 +23,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const version = b.option([]const u8, "version", "App version (semver, default from build.zig.zon)") orelse "0.1.0";
+    const update_key = updatePublicKey(b);
     const os = target.result.os.tag;
     const host_os = builtin.os.tag;
     // macOS frameworks can only be linked on a Mac; elsewhere -Dtarget=*-macos builds an object.
@@ -41,7 +46,7 @@ pub fn build(b: *std.Build) void {
     options.addOption([]const u8, "version", version);
     options.addOption([]const u8, "zpui_commit", zpui_commit);
     const options_mod = options.createModule();
-    const mod = appModule(b, target, optimize, asset_index, options_mod);
+    const mod = appModule(b, target, optimize, asset_index, options_mod, update_key);
 
     if (mac_cross) {
         // No SDK: compile to an object (CI links on a Mac).
@@ -83,7 +88,7 @@ pub fn build(b: *std.Build) void {
         var q = target.query;
         q.cpu_arch = if (target.result.cpu.arch == .aarch64) .x86_64 else .aarch64;
         const other = b.resolveTargetQuery(q);
-        other_exe = appExe(b, appModule(b, other, optimize, asset_index, options_mod), os);
+        other_exe = appExe(b, appModule(b, other, optimize, asset_index, options_mod, update_key), os);
     }
     @import("packaging/package.zig").addPackageStep(b, .{ .exe = exe, .other_exe = other_exe, .target = target, .version = version });
 
@@ -94,8 +99,16 @@ pub fn build(b: *std.Build) void {
     b.step("icons", "Regenerate packaging/icons/ (app icon PNGs, .icns, .ico) from art/cat/icon.svg").dependOn(&icons.step);
 }
 
-fn appModule(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, asset_index: *std.Build.Module, options: *std.Build.Module) *std.Build.Module {
+/// `-Dupdate-public-key` (64 hex), or "" for a build without updates. The updater
+/// package validates it and stops the build if it's malformed.
+fn updatePublicKey(b: *std.Build) []const u8 {
+    const raw = b.option([]const u8, "update-public-key", "Ed25519 public key for signed updates (64 hex; default: none, updates off)") orelse return "";
+    return std.mem.trim(u8, raw, " \t\r\n");
+}
+
+fn appModule(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, asset_index: *std.Build.Module, options: *std.Build.Module, update_key: []const u8) *std.Build.Module {
     const zpui_dep = b.dependency("zpui", .{ .target = target, .optimize = optimize });
+    const updater_dep = b.dependency("updater", .{ .target = target, .optimize = optimize, .@"public-key" = update_key });
     const mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
@@ -103,6 +116,7 @@ fn appModule(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.buil
         .link_libc = true,
         .imports = &.{
             .{ .name = "zpui", .module = zpui_dep.module("zpui") },
+            .{ .name = "updater", .module = updater_dep.module("updater") },
             .{ .name = "asset_index", .module = asset_index },
             .{ .name = "build_options", .module = options },
         },
