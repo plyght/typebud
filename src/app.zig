@@ -198,6 +198,8 @@ pub const Typebud = struct {
         app.onAction(OpenSettings, self, onOpenSettings) catch {};
         app.onAction(CheckUpdates, self, onCheckUpdates) catch {};
         app.onAction(Quit, self, onQuit) catch {};
+        // ⌘, opens (or raises) Settings from any typebud window, as in every Mac app.
+        if (builtin.os.tag == .macos) app.bindKeys(&.{.init("cmd-,", OpenSettings{}, null)}) catch {};
 
         self.animal = self.catalog.indexOf(self.settings.animal.slice()) orelse 0;
         self.state = pet_state.PetState.init(self.now(), self.stateConfig());
@@ -682,15 +684,25 @@ pub const Typebud = struct {
     // ---- settings window ------------------------------------------------------------------
 
     pub fn openSettings(self: *Typebud) void {
+        const mac = builtin.os.tag == .macos;
+        // An accessory (LSUIElement) app is never active on its own: bring it forward so
+        // the settings window becomes key in front of the app the user was in.
+        if (mac) self.app.activate(true);
         if (self.settingsWindow()) |w| {
             w.activateWindow();
             return;
         }
+        // macOS: System Settings' window: full-size content under a transparent, hidden
+        // title and an empty unified toolbar (traffic lights centred in the toolbar band
+        // over the sidebar), no separator, non-opaque for the sidebar material, frame
+        // remembered across launches.
         const handle = self.app.openWindow(.{
-            .bounds = .{ .origin = .{ .x = 120, .y = 120 }, .size = settings_view.window_size },
-            .titlebar = if (builtin.os.tag == .macos) .{ .title = "typebud Settings" } else null,
-            .app_id = if (builtin.os.tag == .macos) bundle_id else app_id,
-            .min_size = settings_view.window_size,
+            .bounds = .{ .origin = .{ .x = 120, .y = 120 }, .size = if (mac) settings_view.mac_window_size else settings_view.window_size },
+            .titlebar = if (mac) .{ .title = "typebud Settings", .appears_transparent = true, .toolbar = .unified, .separator = .none } else null,
+            .app_id = if (mac) bundle_id else app_id,
+            .min_size = if (mac) settings_view.mac_min_size else settings_view.window_size,
+            .background = if (mac) .transparent else .opaque_,
+            .frame_autosave_name = if (mac and !self.options.ephemeral) "typebud.settings" else null,
         }, settings_view.SettingsView, settings_view.SettingsView.init, .{}) catch |e| {
             std.log.err("settings window: {t}", .{e});
             return;

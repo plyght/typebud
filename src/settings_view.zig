@@ -29,6 +29,9 @@ const Typebud = app_mod.Typebud;
 const Bounds = zpui.Bounds(zpui.Pixels);
 
 pub const window_size: zpui.Size(zpui.Pixels) = .{ .width = 760, .height = 600 };
+/// macOS: the whole window (the toolbar band is part of the content).
+pub const mac_window_size: zpui.Size(zpui.Pixels) = .{ .width = 780, .height = 620 };
+pub const mac_min_size: zpui.Size(zpui.Pixels) = .{ .width = 680, .height = 460 };
 
 pub const Section = enum {
     character,
@@ -40,6 +43,9 @@ pub const Section = enum {
     credits,
 
     pub const labels = [_][]const u8{ "Character", "Accessories", "Behavior", "Sounds", "Visibility", "System", "Credits" };
+    /// macOS sidebar: SF Symbol and badge color (System Settings' palette).
+    pub const symbols = [_][]const u8{ "pawprint.fill", "headphones", "slider.horizontal.3", "speaker.wave.2.fill", "eye.fill", "gearshape.fill", "heart.fill" };
+    pub const badges = [_]u32{ 0xff9500, 0xaf52de, 0x007aff, 0xff3b30, 0x30b0c7, 0x8e8e93, 0xff2d55 };
 };
 
 const Toggle = enum(u8) { keyboard, desk_plant, desk_lamp, desk_mug, sparkles, animations, sound, key_up, mute_other_audio, mute_mic, remember_visible, launch_at_login, precise_input, auto_update };
@@ -75,6 +81,7 @@ pub const SettingsView = struct {
     }
 
     pub fn render(self: *SettingsView, window: *Window, cx: *Context(SettingsView)) zpui.Div {
+        if (builtin.os.tag == .macos) return self.renderMac(window, cx);
         const tb = app_mod.instance;
         const look = prefs.lookFor(window);
         const sec = tb.settings_section;
@@ -84,6 +91,123 @@ pub const SettingsView = struct {
         return div().size(zpui.relative(1)).flex().flexCol().bg(look.window_bg)
             .child(prefs.headerBar(window, look, "typebud Settings"))
             .child(body);
+    }
+
+    // ---- macOS: System Settings window ----------------------------------------------------
+    //
+    // The window has a transparent, hidden title and an empty unified NSToolbar
+    // (app.zig), so the traffic lights sit centred in a 52 pt toolbar band that is part of
+    // the content. The sidebar runs the full window height under them: on macOS 26+ a
+    // floating Liquid Glass pane inset from the window edges (NSGlassEffectView over the
+    // behind-window `.sidebar` material), on older macOS the flush `.sidebar` vibrancy
+    // column. zpui paints everything else opaque (alpha 0 only under the sidebar). The
+    // detail column shows the page title in the toolbar band, aligned with the traffic
+    // lights, over a scrolling grouped form.
+
+    const band_h: f32 = 52;
+    const sidebar_w: f32 = 220;
+
+    fn renderMac(self: *SettingsView, window: *Window, cx: *Context(SettingsView)) zpui.Div {
+        const tb = app_mod.instance;
+        const look = macLook(window);
+        const sec = tb.settings_section;
+        const glass = window.supportsLiquidGlass();
+        const vp = window.viewportSize();
+        const inset: f32 = if (glass) 8 else 0;
+        const radius: f32 = if (glass) 18 else 0;
+        const pane: Bounds = .{ .origin = .{ .x = inset, .y = inset }, .size = .{ .width = sidebar_w - 2 * inset, .height = @max(vp.height - 2 * inset, 0) } };
+        const family = zpui.desktop_controls.fontFamily(window, look);
+
+        // Opaque window background everywhere but the sidebar pane.
+        var root = div().relative().size(zpui.relative(1)).overflowHidden()
+            .fontFamily(family).textSize(px(13)).textColor(look.fg)
+            .onKeyDown(cx.listener(SettingsView.onKey));
+        root = root.child(div().absolute().top(px(0)).bottom(px(0)).left(px(sidebar_w)).right(px(0)).bg(look.window_bg));
+        var column = div().absolute().top(px(0)).bottom(px(0)).left(px(0)).w(px(sidebar_w)).overflowHidden();
+        if (glass) {
+            // A ring of window background whose inner edge is the pane's rounded rect.
+            const ring: f32 = 48;
+            column = column.child(div().absolute().left(px(pane.origin.x - ring)).top(px(pane.origin.y - ring))
+                .w(px(pane.size.width + 2 * ring)).h(px(pane.size.height + 2 * ring))
+                .border(px(ring)).borderColor(look.window_bg).rounded(px(radius + ring)));
+        } else {
+            column = column.child(div().absolute().top(px(0)).bottom(px(0)).right(px(0)).w(px(1)).bg(look.separator));
+        }
+        root = root.child(column);
+
+        const rows = self.macSidebarRows(window, look, cx, sec, glass);
+        var pane_div = div().absolute().left(px(pane.origin.x)).top(px(pane.origin.y)).w(px(pane.size.width)).h(px(pane.size.height))
+            .child(zpui.sidebarMaterial("sidebar-material", .{ .corner_radius = radius, .without_glass = true }, div().absolute().inset0()));
+        if (glass) {
+            pane_div = pane_div.child(zpui.liquidGlass("sidebar-glass", .{ .shape = .{ .rounded = radius } }, div().size(zpui.relative(1)).child(rows)));
+        } else pane_div = pane_div.child(rows);
+        root = root.child(pane_div);
+
+        // Detail: the page title in the toolbar band, then the scrolling form.
+        const title = div().id("page-title").flex().flexNone().itemsCenter().h(px(band_h)).px(px(20))
+            .textSize(px(15)).fontWeight(700).textColor(look.fg).role(.heading).child(Section.labels[@intFromEnum(sec)]);
+        const detail = div().absolute().top(px(0)).bottom(px(0)).left(px(sidebar_w)).right(px(0)).flex().flexCol()
+            .child(title)
+            .child(div().flex1().minH(px(0)).child(self.page(window, look, cx, sec)));
+        return root.child(detail);
+    }
+
+    fn macSidebarRows(_: *SettingsView, window: *Window, look: prefs.Look, cx: *Context(SettingsView), sec: Section, glass: bool) zpui.StatefulDiv {
+        const sys = systemColors(window);
+        const active = window.isWindowActive();
+        const sel_bg = if (sys) |c| hsla(if (active) c.selected_content_background else c.unemphasized_selected_content_background) else look.accent;
+        const sel_fg = if (active) (if (sys) |c| hsla(c.alternate_selected_text) else look.accent_fg) else look.fg;
+        // Rows start under the traffic lights' toolbar band.
+        const inset: f32 = if (glass) 8 else 0;
+        var col = div().id("sections").flex().flexCol().gap(px(2)).px(px(10)).pt(px(band_h + 4 - inset)).role(.tab_list).ariaLabel("Sections");
+        for (Section.labels, 0..) |label, i| {
+            const on = @intFromEnum(sec) == i;
+            const badge = div().flexNone().w(px(20)).h(px(20)).rounded(px(5)).bg(zpui.rgb(Section.badges[i]).toHsla())
+                .flex().itemsCenter().justifyCenter()
+                .child(zpui.systemSymbol(Section.symbols[i], .{ .point_size = 11.5, .weight = .medium, .fit = 14 }).w(px(14)).h(px(14)).textColor(zpui.rgb(0xffffff).toHsla()));
+            col = col.child(div().id(.{ "section", i }).flex().itemsCenter().gap(px(8)).h(px(if (glass) 32 else 28)).px(px(6))
+                .rounded(px(if (glass) 9 else 5)).bg(if (on) sel_bg else zpui.color.transparent_black)
+                .textColor(if (on) sel_fg else look.fg).textSize(px(13))
+                .role(.tab).ariaLabel(label).ariaSelected(on)
+                .onClick(cx.listenerWith(@as(u8, @intCast(i)), SettingsView.onSection))
+                .child(badge)
+                .child(div().flex1().minW(px(0)).overflowHidden().whitespaceNowrap().child(label)));
+        }
+        return col;
+    }
+
+    /// The System Settings form look with the system's own semantic colors
+    /// (labelColor, secondaryLabelColor, separatorColor, windowBackgroundColor,
+    /// controlAccentColor) for the window's appearance.
+    fn macLook(window: *Window) prefs.Look {
+        var look = prefs.lookFor(window);
+        if (systemColors(window)) |c| {
+            look.fg = hsla(c.label);
+            look.fg_dim = hsla(c.secondary_label);
+            look.separator = hsla(c.separator);
+            look.window_bg = hsla(c.window_background);
+            look.accent = hsla(c.control_accent);
+            look.item_hover = look.accent;
+            look.focus_ring = look.accent.alpha(0.5);
+        }
+        return look;
+    }
+
+    fn onKey(_: *SettingsView, ev: *const zpui.input.KeyDownEvent, window: *Window, cx: *Context(SettingsView)) void {
+        const ks = ev.keystroke;
+        const m = ks.modifiers;
+        if (m.platform and !m.control and !m.alt and std.mem.eql(u8, ks.key, "w")) {
+            window.removeWindow();
+            return;
+        }
+        if (m.platform or m.control or m.alt) return;
+        const tb = app_mod.instance;
+        const n: u8 = Section.labels.len;
+        const cur: u8 = @intFromEnum(tb.settings_section);
+        const next: u8 = if (std.mem.eql(u8, ks.key, "down")) @min(cur + 1, n - 1) else if (std.mem.eql(u8, ks.key, "up")) cur -| 1 else if (std.mem.eql(u8, ks.key, "home")) 0 else if (std.mem.eql(u8, ks.key, "end")) n - 1 else return;
+        if (next == cur) return;
+        tb.settings_section = @enumFromInt(next);
+        cx.notify();
     }
 
     fn sidebar(_: *SettingsView, window: *Window, look: prefs.Look, cx: *Context(SettingsView), sec: Section) zpui.AnyElement {
@@ -502,6 +626,17 @@ fn appIcon(name: []const u8) zpui.Div {
     const initial = if (name.len > 0) zpui.fmt("{c}", .{std.ascii.toUpper(name[0])}) else "?";
     return div().size(zpui.relative(1)).rounded(px(6)).bg(zpui.rgb(palette[h % palette.len]).toHsla()).flex().itemsCenter().justifyCenter()
         .textColor(zpui.rgb(0xffffff).toHsla()).fontWeight(700).textSize(px(12)).child(initial);
+}
+
+/// The system's semantic colors for the window's appearance, or for the forced light /
+/// dark look (smoke screenshots, `glass_dark`).
+fn systemColors(window: *Window) ?zpui.platform.SystemColors {
+    return window.systemColors(window.desktopTheme().dark orelse window.glass_dark);
+}
+
+/// 0xRRGGBBAA (zpui.platform.SystemColors) as a color.
+fn hsla(rgba: u32) zpui.Hsla {
+    return zpui.rgba(rgba).toHsla();
 }
 
 fn previewBg(v: art.Vibe) zpui.Hsla {

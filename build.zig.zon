@@ -4,7 +4,7 @@
     .fingerprint = 0xf88a70d101e1789,
     .minimum_zig_version = "0.17.0",
     .dependencies = .{
-        // plyght/zpui @ c22fa0a1882a73d4b1dc43469bfca960f46e1c36, checked out at ./zpui
+        // plyght/zpui @ b01b999e4eb77b73eb45dd8fc70aee2983448bdf, checked out at ./zpui
         // (scripts/fetch-zpui.sh). A path dependency because zpui's package manifest only
         // lists src/, while its build.zig also needs vendor/ (lunasvg, stb).
         .zpui = .{ .path = "zpui" },
