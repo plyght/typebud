@@ -201,7 +201,9 @@ pub const PetState = struct {
                 p.generation += 1;
             },
             .typing, .excited => {
-                if (p.mode == .excited) p.updateExcited(now);
+                // A fast streak becomes excited at its deadline (`nextDeadline`) even when
+                // no key lands exactly then; excited calms down once the rate drops.
+                if (p.mode == .excited or p.fast_since != 0) p.updateExcited(now);
                 if (now - p.last_key >= p.timing.idle_after) {
                     p.mode = .idle;
                     p.fast_since = 0;
@@ -369,6 +371,45 @@ test "sustained fast typing gets excited, slowing down calms it" {
     _ = p.update(end2 + 1 * s);
     try testing.expect(p.mode == .idle);
     try testing.expect(p.frame(end2 + 1 * s) == .idle or p.frame(end2 + 1 * s) == .peek);
+}
+
+test "a fast streak turns excited at its deadline without another key" {
+    var p = PetState.init(0, .{ .excited_wpm = 60 });
+    // 10 keys/s: the rate crosses 60 WPM (3 keys/s over 3 s) at the 9th key.
+    var t: u64 = 1 * s;
+    while (p.fast_since == 0) : (t += 100 * ms) p.onKey(.{ .key = .letter, .t = t });
+    const due = p.fast_since + p.timing.excited_after;
+    // Keep typing up to just before the deadline, then the timer fires between keys.
+    while (t + 100 * ms < due) : (t += 100 * ms) p.onKey(.{ .key = .letter, .t = t });
+    try testing.expectEqual(Mode.typing, p.mode);
+    try testing.expectEqual(@as(?u64, due), p.nextDeadline(t - 100 * ms));
+    _ = p.update(due);
+    try testing.expectEqual(art.Frame.excited, p.frame(due));
+}
+
+test "coarse timer: keys bunched on 15.6 ms ticks with stretched gaps still get excited" {
+    // A Windows-style 15.625 ms timer tick: every key timestamp lands on a tick and each
+    // nominal 85 ms (±15 %) gap is rounded up to whole ticks, like a Sleep()-driven burst.
+    const tick: u64 = 15_625_000;
+    var p = PetState.init(0, .{ .excited_wpm = 50 });
+    var rng: std.Random.DefaultPrng = .init(7);
+    var t: u64 = 64 * tick;
+    var excited_at: ?u64 = null;
+    for (0..60) |_| {
+        p.onKey(.{ .key = .letter, .key_x = rng.random().float(f32), .t = t });
+        _ = p.update(t);
+        if (excited_at == null and p.mode == .excited) excited_at = t;
+        const gap: u64 = @intFromFloat(85.0 * @as(f64, ms) * (0.85 + rng.random().float(f64) * 0.3));
+        t += (gap + tick - 1) / tick * tick;
+        // The pet's timer can only fire on a tick too.
+        if (p.nextDeadline(t - tick)) |d| if (d < t) {
+            _ = p.update((d + tick - 1) / tick * tick);
+        };
+    }
+    try testing.expect(excited_at != null);
+    // From cold: ~1.2 s until the 3 s window holds 50 WPM, then `excited_after` (2.5 s).
+    try testing.expect(excited_at.? - 64 * tick <= 4 * s);
+    try testing.expectEqual(Mode.excited, p.mode);
 }
 
 test "slow typing never gets excited" {
