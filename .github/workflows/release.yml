@@ -226,6 +226,29 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent out/pkg/Typebud.app dist/typebud-macos-universal.zip
           spctl --assess --type execute --verbose out/pkg/Typebud.app
 
+      - name: Disk image (Typebud-<version>.dmg)
+        id: dmg
+        # An extra first-install download; the zip above is what the updater uses.
+        # Not fatal: a release without the DMG is still complete.
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          scripts/make-dmg.sh out/pkg/Typebud.app "$VERSION" dist-installer
+          dmg="dist-installer/Typebud-$VERSION.dmg"
+          test -s "$dmg"
+          hdiutil verify "$dmg"
+          if [[ "$HAS_DEVELOPER_ID" == "true" && "$HAS_NOTARY" == "true" ]]; then
+            xcrun notarytool submit "$dmg" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+            xcrun stapler staple "$dmg"
+          fi
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      - name: Disk image skipped
+        if: steps.dmg.outcome == 'failure'
+        run: echo "::warning::make-dmg.sh failed; the release goes out without the DMG."
+
       - name: Clean up keychain
         if: always() && env.HAS_DEVELOPER_ID == 'true'
         run: security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true
@@ -235,6 +258,12 @@ jobs:
           name: dist-macos
           path: dist/typebud-macos-universal.zip
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: steps.dmg.outcome == 'success'
+        with:
+          name: installer-macos
+          path: dist-installer/*.dmg
+          if-no-files-found: ignore
 
   build-windows:
     name: Windows (x86_64)
@@ -265,11 +294,31 @@ jobs:
           mkdir -p dist
           (cd out/pkg/typebud && 7z a -tzip -mx=9 "$GITHUB_WORKSPACE/dist/typebud-windows-x86_64.zip" typebud.exe)
           7z l dist/typebud-windows-x86_64.zip
+      - name: Installer (typebud-setup-<version>-x86_64.exe)
+        id: setup
+        # An extra first-install download; the zip above is what the updater uses.
+        # Not fatal: a release without the installer is still complete.
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "choco install innosetup failed ($LASTEXITCODE)" }
+          ./scripts/make-installer-windows.ps1 -PackageDir out/pkg/typebud -Version $env:VERSION -OutDir dist-installer
+          if (-not (Test-Path "dist-installer/typebud-setup-$($env:VERSION)-x86_64.exe")) { throw 'installer missing' }
+      - name: Installer skipped
+        if: steps.setup.outcome == 'failure'
+        run: echo "::warning::make-installer-windows.ps1 failed; the release goes out without the setup .exe."
       - uses: actions/upload-artifact@v4
         with:
           name: dist-windows-x86_64
           path: dist/typebud-windows-x86_64.zip
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: steps.setup.outcome == 'success'
+        with:
+          name: installer-windows
+          path: dist-installer/*.exe
+          if-no-files-found: ignore
 
   build-linux:
     name: Linux (x86_64)
@@ -367,6 +416,11 @@ jobs:
           pattern: dist-*
           path: dist
           merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: installer-*
+          path: dist
+          merge-multiple: true
       - name: Check the four artifacts
         run: |
           set -euo pipefail
@@ -383,7 +437,9 @@ jobs:
         if: env.UPDATES == 'true'
         run: |
           set -euo pipefail
-          updater/zig-out/bin/typebud-mkmanifest --version "$VERSION" --channel "$CHANNEL" -o dist/manifest.json dist/typebud-*
+          updater/zig-out/bin/typebud-mkmanifest --version "$VERSION" --channel "$CHANNEL" -o dist/manifest.json \
+            dist/typebud-macos-universal.zip dist/typebud-windows-x86_64.zip \
+            dist/typebud-linux-x86_64.tar.gz dist/typebud-linux-x86_64.AppImage
           cat dist/manifest.json
       - name: Sign manifest.json
         if: env.UPDATES == 'true'
@@ -405,7 +461,7 @@ jobs:
       - name: Release notes and checksums
         run: |
           set -euo pipefail
-          (cd dist && sha256sum typebud-* $( [[ "$UPDATES" == "true" ]] && echo manifest.json manifest.json.sig ) > SHA256SUMS.txt)
+          (cd dist && sha256sum typebud-* $(ls Typebud-*.dmg 2>/dev/null) $( [[ "$UPDATES" == "true" ]] && echo manifest.json manifest.json.sig ) > SHA256SUMS.txt)
           cat dist/SHA256SUMS.txt
           {
             if [[ "$UPDATES" == "true" ]]; then
@@ -414,9 +470,12 @@ jobs:
               echo "**Automatic updates not enabled for this build.** This release has no signed update manifest, so typebud can't update itself to or from it: download it from this page."
             fi
             echo
+            dmg="Typebud-$VERSION.dmg"; setup="typebud-setup-$VERSION-x86_64.exe"
             echo "| Platform | File |"
             echo "| --- | --- |"
+            [[ -f "dist/$dmg" ]] && echo "| macOS 12+ (Apple silicon + Intel), disk image | \`$dmg\` |"
             echo "| macOS 12+ (Apple silicon + Intel) | \`typebud-macos-universal.zip\` |"
+            [[ -f "dist/$setup" ]] && echo "| Windows 10/11 x64, installer | \`$setup\` |"
             echo "| Windows 10/11 x64 (portable) | \`typebud-windows-x86_64.zip\` |"
             echo "| Linux x86_64 | \`typebud-linux-x86_64.AppImage\` or \`typebud-linux-x86_64.tar.gz\` |"
             echo
@@ -445,6 +504,7 @@ jobs:
             flags+=(--target "$GITHUB_SHA")
           fi
           files=(dist/typebud-* dist/SHA256SUMS.txt)
+          for f in dist/Typebud-*.dmg; do [[ -f "$f" ]] && files+=("$f"); done
           [[ "$UPDATES" == "true" ]] && files+=(dist/manifest.json dist/manifest.json.sig)
           # Upload everything to a draft first: drafts are invisible to the updater,
           # so clients never see a release with missing assets.

@@ -362,7 +362,10 @@ All five give signing, notarization and stapling.
    5. creates the release as a draft with every asset (`typebud-macos-universal.zip`,
       `typebud-windows-x86_64.zip`, `typebud-linux-x86_64.tar.gz`,
       `typebud-linux-x86_64.AppImage`, `SHA256SUMS.txt`, and the manifest pair when
-      signed), then publishes it. Without updates configured, the notes start with
+      signed), plus, when `scripts/make-dmg.sh` / `scripts/make-installer-windows.ps1`
+      succeed, `Typebud-<version>.dmg` and `typebud-setup-<version>-x86_64.exe`
+      (first-install downloads, not in the manifest; see docs/RELEASING.md), then
+      publishes it. Without updates configured, the notes start with
       "Automatic updates not enabled for this build".
    6. with updates configured: runs `typebud-update-check check --current 0.0.0
       --download` against the live release.
