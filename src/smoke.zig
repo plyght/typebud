@@ -205,13 +205,25 @@ fn sWpmSmall(tb: *Typebud) void {
     tb.settings.show_wpm = true;
     tb.settings.size = settings_min_size;
     tb.settingsChanged();
-    st.typist.start(tb, .alternate, 32, 110); // ~110 WPM for ~3.5 s
+    typeForWpm(tb);
 }
 
+var wpm_t0: u64 = 0;
+
+fn typeForWpm(tb: *Typebud) void {
+    wpm_t0 = tb.now();
+    st.typist.start(tb, .alternate, 32, 110); // ~110 WPM for ~3.5 s (slower where timers lag)
+}
+
+/// The bubble against the typist's actual pace (CI timers can run late).
 fn expectWpm(tb: *Typebud, what: []const u8) void {
     const v = tb.wpm.shown orelse return fail(tb, "{s}: no WPM bubble while typing", .{what});
-    note(tb, "{s}: bubble shows {d} wpm", .{ what, v });
-    if (v < 70 or v > 160) fail(tb, "{s}: {d} wpm, expected about 110", .{ what, v });
+    const t = &st.typist;
+    const span_s = @as(f32, @floatFromInt(t.last_press_ns -| wpm_t0)) / std.time.ns_per_s;
+    const want = if (span_s > 0) @as(f32, @floatFromInt(t.n)) / span_s * 12 else 0;
+    note(tb, "{s}: bubble shows {d} wpm (typist: {d} keys in {d:.1} s = {d:.0} wpm)", .{ what, v, t.n, span_s, want });
+    const got: f32 = @floatFromInt(v);
+    if (got < want * 0.75 or got > want * 1.3) fail(tb, "{s}: {d} wpm, expected about {d:.0}", .{ what, v, want });
 }
 
 fn sWpmSmallShot(tb: *Typebud) void {
@@ -222,12 +234,13 @@ fn sWpmSmallShot(tb: *Typebud) void {
     tb.settings.animal.set("penguin");
     tb.settings.vibe = .bright;
     tb.settingsChanged();
-    st.typist.start(tb, .alternate, 32, 110);
+    typeForWpm(tb);
 }
 
 fn sWpmLargeShot(tb: *Typebud) void {
     expectWpm(tb, "WPM at the largest size");
     shotPetWindow(tb, "wpm_large");
+    st.typist.stop();
 }
 
 fn sWpmPinkShot(tb: *Typebud) void {
@@ -235,12 +248,13 @@ fn sWpmPinkShot(tb: *Typebud) void {
     tb.settings.animal.set("capybara");
     tb.settings.vibe = .pink;
     tb.settingsChanged();
-    st.typist.start(tb, .alternate, 32, 110);
+    typeForWpm(tb);
 }
 
 fn sWpmPinkShot2(tb: *Typebud) void {
     expectWpm(tb, "WPM pink");
     shotPetWindow(tb, "wpm_pink");
+    st.typist.stop();
 }
 
 fn sWpmHidden(tb: *Typebud) void {
@@ -530,9 +544,9 @@ const pet_steps = [_]script.Step{
     .{ .run = sWpmSmall },
     .{ .wait_ms = 2600, .run = sWpmSmallShot },
     .{ .wait_ms = 2600, .run = sWpmLargeShot },
-    .{ .wait_ms = 1200, .run = sWpmPinkShot },
+    .{ .wait_ms = 2400, .run = sWpmPinkShot },
     .{ .wait_ms = 2600, .run = sWpmPinkShot2 },
-    .{ .wait_ms = 4300, .run = sWpmHidden },
+    .{ .wait_ms = 3600, .run = sWpmHidden },
     .{ .run = sSeedApps },
 };
 
