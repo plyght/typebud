@@ -335,18 +335,18 @@ All five give signing, notarization and stapling.
 
 ## Cutting a release
 
-1. Set the version in `build.zig.zon` (`.version`); the tag must match it.
-2. Optionally rehearse: **Actions > Release > Run workflow** with `version` (e.g.
+1. Optionally rehearse: **Actions > Release > Run workflow** with `version` (e.g.
    `0.2.0-rc`) and `dry_run` checked. It builds and packages every platform and
    uploads the files as the run's `release-dry-run` artifact; no tag, no release.
-3. Tag and push:
+2. Bump `.version` in `build.zig.zon` (`0.2.0` for stable, `0.3.0-beta.1` for the
+   beta channel) and push it to `main`. The push starts the Release workflow, which
+   tags the built commit `v<version>` once everything is built.
+3. Pushing a matching `v*` tag by hand also works:
 
    ```sh
-   git tag -a v0.2.0 -m "typebud 0.2.0" && git push origin v0.2.0      # stable
-   git tag -a v0.3.0-beta.1 -m "typebud 0.3.0-beta.1" && git push origin v0.3.0-beta.1   # beta channel
+   git tag -a v0.2.0 -m "typebud 0.2.0" && git push origin v0.2.0
    ```
 
-   (Or run the workflow with `dry_run` unchecked: it creates the tag at that commit.)
 4. The workflow:
    1. checks the version (semver; a `-pre` suffix means the beta channel and a
       GitHub pre-release) and whether updates are configured (see above).

@@ -74,7 +74,7 @@ Working on the art? `python3 scripts/render_art.py <animal>` renders every frame
 
 ## Releases & updates
 
-Releases are built by GitHub Actions when a `v*` tag is pushed. Automatic updates turn on as soon as an update-signing key is set up; until then each release is a normal download. See [`docs/RELEASING.md`](docs/RELEASING.md) and [`docs/UPDATES.md`](docs/UPDATES.md).
+Bumping the version in `build.zig.zon` on `main` is all a release takes, because GitHub Actions then builds, tags and publishes it. Automatic updates turn on as soon as an update-signing key is set up; until then each release is a normal download. See [`docs/RELEASING.md`](docs/RELEASING.md) and [`docs/UPDATES.md`](docs/UPDATES.md).
 
 ## Credits
 
