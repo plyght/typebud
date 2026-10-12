@@ -20,7 +20,7 @@ const builtin = @import("builtin");
 pub const zpui_commit = "d08a102442e9544180e43f02002c68c5c11a23c6";
 
 pub fn build(b: *std.Build) void {
-    const target = macosMinimum(b, b.standardTargetOptions(.{}));
+    const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const version = b.option([]const u8, "version", "App version (semver, default from build.zig.zon)") orelse "0.1.0";
     const update_key = updatePublicKey(b);
@@ -111,16 +111,6 @@ fn runApp(b: *std.Build, exe: *std.Build.Step.Compile, bin: ?std.Build.LazyPath)
     const run = std.Build.Step.Run.create(b, "run typebud");
     run.addFileArg(p);
     return run;
-}
-
-/// macOS builds default to the bundle's LSMinimumSystemVersion (12.0) instead of the
-/// build machine's OS version, which would stop the app launching on anything older.
-/// Only the minimum changes, so the native SDK is still found and linked against.
-fn macosMinimum(b: *std.Build, t: std.Build.ResolvedTarget) std.Build.ResolvedTarget {
-    if (t.result.os.tag != .macos or t.query.os_version_min != null) return t;
-    var q = t.query;
-    q.os_version_min = .{ .semver = macos_sdk.minimum };
-    return b.resolveTargetQuery(q);
 }
 
 /// `-Dupdate-public-key` (64 hex), or "" for a build without updates. The updater
