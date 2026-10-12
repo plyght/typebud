@@ -195,7 +195,7 @@ jobs:
           # Native build + the x86_64 slice, combined with lipo by the package step
           # (-Duniversal). An explicit -Dtarget=*-macos would lose the native SDK
           # paths, so the other slice comes from the package step instead.
-          zig build package -Doptimize=ReleaseFast -Duniversal=true -Dversion="$VERSION" \
+          zig build package -Doptimize=ReleaseFast -Dcpu=baseline -Duniversal=true -Dversion="$VERSION" \
             -Dupdate-public-key="$UPDATE_PUBLIC_KEY" --prefix out/pkg --summary all
           exe=out/pkg/Typebud.app/Contents/MacOS/typebud
           lipo -info "$exe"
@@ -327,7 +327,7 @@ jobs:
       - name: Build and package
         run: |
           set -euo pipefail
-          zig build package -Doptimize=ReleaseFast -Dtarget=x86_64-windows-gnu -Dversion="$VERSION" \
+          zig build package -Doptimize=ReleaseFast -Dtarget=x86_64-windows-gnu -Dcpu=baseline -Dversion="$VERSION" \
             -Dupdate-public-key="$UPDATE_PUBLIC_KEY" --prefix out/pkg --summary all
           test -f out/pkg/typebud/typebud.exe
       - name: Zip (files at the archive root)
@@ -385,9 +385,14 @@ jobs:
       - name: Build and package
         run: |
           set -euo pipefail
-          zig build package -Doptimize=ReleaseFast -Dversion="$VERSION" \
+          # -Dcpu=baseline: without it Zig targets the runner's own CPU, and a binary built
+          # on an AMD runner used SSE4a and crashed on Intel CPUs.
+          zig build package -Doptimize=ReleaseFast -Dcpu=baseline -Dversion="$VERSION" \
             -Dupdate-public-key="$UPDATE_PUBLIC_KEY" --prefix out/pkg --summary all
           test -x out/pkg/typebud-linux-x86_64/typebud
+          if objdump -d out/pkg/typebud-linux-x86_64/typebud | grep -m5 -E '\s(extrq|insertq)\s|%ymm|%zmm'; then
+            echo "::error::the Linux binary uses instructions beyond baseline x86-64"; exit 1
+          fi
           test -f out/pkg/typebud-linux-x86_64/.typebud-install
           test -f out/pkg/typebud-linux-x86_64/typebud.desktop
           test -x out/pkg/AppDir/AppRun
