@@ -16,6 +16,7 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
+const macos_sdk = @import("macos_sdk.zig");
 
 pub const bundle_id = "lol.peril.typebud";
 
@@ -51,13 +52,14 @@ fn install(b: *std.Build, step: *std.Build.Step, src: std.Build.LazyPath, dest: 
 
 fn macos(b: *std.Build, step: *std.Build.Step, o: Options) void {
     const prebuilt = b.option([]const u8, "macos-exe", "Package this executable (e.g. a universal binary) instead of building one");
+    // Each slice declares the macOS 26 SDK (macos_sdk.zig) before lipo combines them.
     const exe_src: std.Build.LazyPath = if (prebuilt) |p| .{ .cwd_relative = p } else if (o.other_exe) |other| blk: {
         const lipo = b.addSystemCommand(&.{ "lipo", "-create", "-output" });
         const out = lipo.addOutputFileArg("typebud");
-        lipo.addArtifactArg(o.exe);
-        lipo.addArtifactArg(other);
+        lipo.addFileArg(macos_sdk.declareSdk(b, o.exe));
+        lipo.addFileArg(macos_sdk.declareSdk(b, other));
         break :blk out;
-    } else o.exe.getEmittedBin();
+    } else macos_sdk.declareSdk(b, o.exe);
     const wf = b.addWriteFiles();
     const plist = wf.add("Info.plist", b.fmt(
         \\<?xml version="1.0" encoding="UTF-8"?>
@@ -75,7 +77,7 @@ fn macos(b: *std.Build, step: *std.Build.Step, o: Options) void {
         \\  <key>CFBundleShortVersionString</key><string>{s}</string>
         \\  <key>CFBundleVersion</key><string>{s}</string>
         \\  <key>LSApplicationCategoryType</key><string>public.app-category.entertainment</string>
-        \\  <key>LSMinimumSystemVersion</key><string>12.0</string>
+        \\  <key>LSMinimumSystemVersion</key><string>{d}.{d}</string>
         \\  <key>LSUIElement</key><true/>
         \\  <key>NSHighResolutionCapable</key><true/>
         \\  <key>NSHumanReadableCopyright</key><string>typebud contributors</string>
@@ -83,7 +85,7 @@ fn macos(b: *std.Build, step: *std.Build.Step, o: Options) void {
         \\</dict>
         \\</plist>
         \\
-    , .{ bundle_id, o.version, o.version }));
+    , .{ bundle_id, o.version, o.version, macos_sdk.minimum.major, macos_sdk.minimum.minor }));
     const pkginfo = wf.add("PkgInfo", "APPL????");
     _ = install(b, step, exe_src, "Typebud.app/Contents/MacOS/typebud");
     _ = install(b, step, plist, "Typebud.app/Contents/Info.plist");

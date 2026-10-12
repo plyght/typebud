@@ -20,7 +20,7 @@ const builtin = @import("builtin");
 pub const zpui_commit = "d08a102442e9544180e43f02002c68c5c11a23c6";
 
 pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
+    const target = macosMinimum(b, b.standardTargetOptions(.{}));
     const optimize = b.standardOptimizeOption(.{});
     const version = b.option([]const u8, "version", "App version (semver, default from build.zig.zon)") orelse "0.1.0";
     const update_key = updatePublicKey(b);
@@ -58,15 +58,19 @@ pub fn build(b: *std.Build) void {
     }
 
     const exe = appExe(b, mod, os);
-    b.installArtifact(exe);
     b.step("check", "Compile typebud for -Dtarget").dependOn(&exe.step);
+    // macOS: the installed / run binary declares the macOS 26 SDK (see macos_sdk.zig).
+    const app_bin: ?std.Build.LazyPath = if (os == .macos) macos_sdk.declareSdk(b, exe) else null;
+    if (app_bin) |bin| {
+        b.getInstallStep().dependOn(&b.addInstallBinFile(bin, "typebud").step);
+    } else b.installArtifact(exe);
 
-    const run = b.addRunArtifact(exe);
+    const run = runApp(b, exe, app_bin);
     run.addPassthruArgs();
     run.setCwd(b.path("."));
     b.step("run", "Run typebud").dependOn(&run.step);
 
-    const smoke = b.addRunArtifact(exe);
+    const smoke = runApp(b, exe, app_bin);
     smoke.addArg("--smoke");
     smoke.addPassthruArgs();
     smoke.setCwd(b.path("."));
@@ -97,6 +101,26 @@ pub fn build(b: *std.Build) void {
     icons.addArgs(&.{ "--write-icons", "packaging/icons" });
     icons.setCwd(b.path("."));
     b.step("icons", "Regenerate packaging/icons/ (app icon PNGs, .icns, .ico) from art/cat/icon.svg").dependOn(&icons.step);
+}
+
+const macos_sdk = @import("packaging/macos_sdk.zig");
+
+/// The app itself, or (macOS) its SDK-declaring copy.
+fn runApp(b: *std.Build, exe: *std.Build.Step.Compile, bin: ?std.Build.LazyPath) *std.Build.Step.Run {
+    const p = bin orelse return b.addRunArtifact(exe);
+    const run = std.Build.Step.Run.create(b, "run typebud");
+    run.addFileArg(p);
+    return run;
+}
+
+/// macOS builds default to the bundle's LSMinimumSystemVersion (12.0) instead of the
+/// build machine's OS version, which would stop the app launching on anything older.
+/// Only the minimum changes, so the native SDK is still found and linked against.
+fn macosMinimum(b: *std.Build, t: std.Build.ResolvedTarget) std.Build.ResolvedTarget {
+    if (t.result.os.tag != .macos or t.query.os_version_min != null) return t;
+    var q = t.query;
+    q.os_version_min = .{ .semver = macos_sdk.minimum };
+    return b.resolveTargetQuery(q);
 }
 
 /// `-Dupdate-public-key` (64 hex), or "" for a build without updates. The updater

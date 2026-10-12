@@ -204,9 +204,18 @@ jobs:
       - uses: mlugg/setup-zig@v2
         with:
           version: ${{ env.ZIG_VERSION }}
+      - name: Xcode with the macOS 26 SDK
+        # AppKit's macOS 26 design needs a binary linked on or after the 26 SDK. The
+        # build declares 26.0 either way (packaging/macos_sdk.zig); this links against it.
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1 || true)
+          if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
+          xcode-select -p
+          xcrun --sdk macosx --show-sdk-version
       - name: Package Typebud.app (universal)
         run: |
           zig build package -Doptimize=ReleaseFast -Dversion=$CI_VERSION -Duniversal=true --prefix out/pkg --summary all
+          scripts/check-macos-sdk.sh out/pkg/Typebud.app/Contents/MacOS/typebud
           codesign --force --deep --sign - out/pkg/Typebud.app
           codesign --verify --deep --strict out/pkg/Typebud.app
       - name: Build the disk image

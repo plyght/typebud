@@ -16,6 +16,9 @@ on:
       - src/**
       - build.zig
       - build.zig.zon
+      - packaging/**
+      - scripts/check-macos-sdk.sh
+      - .github/workflows/app.yml
       - art/**
       - sounds/**
       - assets/**
@@ -95,7 +98,9 @@ jobs:
       - name: Unit tests
         run: zig build test --summary all
       - name: Build
-        run: zig build --summary all
+        run: |
+          zig build --summary all
+          scripts/check-macos-sdk.sh zig-out/bin/typebud
       - name: Smoke test (Metal)
         timeout-minutes: 5
         env:
@@ -112,6 +117,7 @@ jobs:
           zig build package -Doptimize=ReleaseFast -Duniversal=true --prefix out/pkg --summary all
           plutil -lint out/pkg/Typebud.app/Contents/Info.plist
           lipo -info out/pkg/Typebud.app/Contents/MacOS/typebud
+          scripts/check-macos-sdk.sh out/pkg/Typebud.app/Contents/MacOS/typebud
           plutil -extract LSUIElement raw out/pkg/Typebud.app/Contents/Info.plist
           ditto -c -k --keepParent out/pkg/Typebud.app out/pkg/Typebud-macos-universal.zip
       - uses: actions/upload-artifact@v4
