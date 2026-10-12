@@ -195,7 +195,8 @@ jobs:
           if-no-files-found: warn
 
   macos:
-    runs-on: macos-15
+    # macOS 27 + Xcode 27 (arm64, public preview); the x86_64 slice is cross-compiled.
+    runs-on: xcode-27
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
@@ -204,11 +205,11 @@ jobs:
       - uses: mlugg/setup-zig@v2
         with:
           version: ${{ env.ZIG_VERSION }}
-      - name: Xcode with the macOS 26 SDK
-        # AppKit's macOS 26 design needs a binary linked on or after the 26 SDK. The
-        # build declares 26.0 either way (packaging/macos_sdk.zig); this links against it.
+      - name: Xcode with the macOS 27 SDK
+        # On macOS 27, AppKit's macOS 27 design needs a binary that declares the 27 SDK.
+        # The build declares 27.0 either way (packaging/macos_sdk.zig); this links against it.
         run: |
-          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1 || true)
+          xcode=$(ls -d /Applications/Xcode_27*.app /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1 || true)
           if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
           xcode-select -p
           xcrun --sdk macosx --show-sdk-version

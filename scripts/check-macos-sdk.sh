@@ -1,7 +1,7 @@
 #!/bin/sh
-# Fails unless every slice of a macOS binary declares minos 12.0 and an SDK >= 26.0
-# (LC_BUILD_VERSION). AppKit gives the macOS 26 design (Liquid Glass controls, sidebar
-# and window chrome) only to binaries linked on or after the 26 SDK; see
+# Fails unless every slice of a macOS binary declares minos 12.0 and an SDK >= 27.0
+# (LC_BUILD_VERSION). AppKit gives the macOS 27 design (controls, sidebar and window
+# chrome) on macOS 27 only to binaries that declare the 27 SDK or later; see
 # packaging/macos_sdk.zig.
 #   scripts/check-macos-sdk.sh zig-out/bin/typebud [Typebud.app/Contents/MacOS/typebud ...]
 set -eu
@@ -14,8 +14,8 @@ for bin in "$@"; do
     echo "$bin ($arch): minos $minos sdk $sdk"
     major=${sdk%%.*}
     case "$major" in ''|*[!0-9]*) major=0 ;; esac
-    if [ -z "$info" ] || [ "$minos" != "12.0" ] || [ "$major" -lt 26 ]; then
-      echo "::error::$bin ($arch) declares minos '$minos' sdk '$sdk' (want minos 12.0, sdk >= 26.0)"
+    if [ -z "$info" ] || [ "$minos" != "12.0" ] || [ "$major" -lt 27 ]; then
+      echo "::error::$bin ($arch) declares minos '$minos' sdk '$sdk' (want minos 12.0, sdk >= 27.0)"
       status=1
     fi
   done

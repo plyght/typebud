@@ -59,7 +59,7 @@ pub fn build(b: *std.Build) void {
 
     const exe = appExe(b, mod, os);
     b.step("check", "Compile typebud for -Dtarget").dependOn(&exe.step);
-    // macOS: the installed / run binary declares the macOS 26 SDK (see macos_sdk.zig).
+    // macOS: the installed / run binary declares the macOS 27 SDK (or newer) (see macos_sdk.zig).
     const app_bin: ?std.Build.LazyPath = if (os == .macos) macos_sdk.declareSdk(b, exe) else null;
     if (app_bin) |bin| {
         b.getInstallStep().dependOn(&b.addInstallBinFile(bin, "typebud").step);

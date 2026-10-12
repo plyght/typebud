@@ -1,14 +1,15 @@
 //! The macOS versions a typebud binary declares (LC_BUILD_VERSION `minos` and `sdk`).
 //!
 //! AppKit picks its look from the SDK an executable was linked against (`sdk`), not from
-//! the OS it runs on: a binary that declares an SDK older than 26 gets the pre-26
-//! controls, sidebar and window chrome even on macOS 26 and later. Zig writes the SDK it
+//! the OS it runs on: a binary that declares an SDK older than 27 gets the macOS 26 (or,
+//! below 26, the pre-Liquid Glass) controls, sidebar and window chrome even on macOS 27.
+//! Zig writes the SDK it
 //! found on the build machine (15.x with Xcode 16) and, for the native target, the build
 //! machine's OS version as `minos` (which would stop the app launching on anything
 //! older). Asking zig for a lower minimum (`-Dtarget=native-native.12.0`) makes it treat
 //! the target as foreign and drop the native SDK's frameworks, so instead each slice is
 //! rewritten after linking with `vtool`: `minos` = Info.plist's LSMinimumSystemVersion
-//! (12.0; zig's std only keys off macOS 11+), `sdk` = the build SDK or 26.0, whichever
+//! (12.0; zig's std only keys off macOS 11+), `sdk` = the build SDK or 27.0, whichever
 //! is newer. The result is ad-hoc signed again (vtool invalidates the linker's
 //! signature; release builds re-sign the bundle). Universal builds patch each slice
 //! before `lipo`.
@@ -18,8 +19,9 @@ const std = @import("std");
 /// LSMinimumSystemVersion in Info.plist and the `minos` every macOS build declares.
 pub const minimum: std.SemanticVersion = .{ .major = 12, .minor = 0, .patch = 0 };
 
-/// The first SDK that opts AppKit into the macOS 26 design (Liquid Glass).
-pub const design_sdk = "26.0";
+/// The SDK floor every build declares: 27.0 opts AppKit into the macOS 27 design on
+/// macOS 27 (26.0 was the first Liquid Glass SDK). CI links with Xcode 27 anyway.
+pub const design_sdk = "27.0";
 
 const script =
     \\set -eu
@@ -29,7 +31,7 @@ const script =
     \\case "$major" in ''|*[!0-9]*) sdk=$floor; major=${floor%%.*} ;; esac
     \\if [ "$major" -lt "${floor%%.*}" ]; then sdk=$floor; fi
     \\if ! vtool=$(xcrun -f vtool 2>/dev/null); then
-    \\  echo "warning: vtool not found (install the Xcode command line tools); typebud keeps the SDK version zig wrote and the pre-26 AppKit look" >&2
+    \\  echo "warning: vtool not found (install the Xcode command line tools); typebud keeps the SDK version zig wrote and an older AppKit look" >&2
     \\  cp "$in" "$out"
     \\  exit 0
     \\fi
@@ -39,7 +41,7 @@ const script =
     \\
 ;
 
-/// A copy of `exe` that declares minos = `minimum` and sdk >= 26.0.
+/// A copy of `exe` that declares minos = `minimum` and sdk >= `design_sdk`.
 pub fn declareSdk(b: *std.Build, exe: *std.Build.Step.Compile) std.Build.LazyPath {
     const target = exe.rootModuleTarget();
     const min = minimum;

@@ -52,7 +52,7 @@ fn install(b: *std.Build, step: *std.Build.Step, src: std.Build.LazyPath, dest: 
 
 fn macos(b: *std.Build, step: *std.Build.Step, o: Options) void {
     const prebuilt = b.option([]const u8, "macos-exe", "Package this executable (e.g. a universal binary) instead of building one");
-    // Each slice declares the macOS 26 SDK (macos_sdk.zig) before lipo combines them.
+    // Each slice declares the macOS 27 SDK (or newer) (macos_sdk.zig) before lipo combines them.
     const exe_src: std.Build.LazyPath = if (prebuilt) |p| .{ .cwd_relative = p } else if (o.other_exe) |other| blk: {
         const lipo = b.addSystemCommand(&.{ "lipo", "-create", "-output" });
         const out = lipo.addOutputFileArg("typebud");
