@@ -514,12 +514,8 @@ pub const OnboardingView = struct {
         var bar = div().id("ob-header").relative().flex().flexNone().itemsCenter().justifyCenter().h(px(h)).wFull().child(dots);
         if (builtin.os.tag == .linux) bar = bar.onMouseDown(.left, cx.listener(OnboardingView.onHeaderDown));
         if (ob.step != .done) {
-            bar = bar.child(div().id("ob-skip").absolute().right(px(14)).top(px((h - 24) / 2)).h(px(24)).px(px(10)).flex().itemsCenter()
-                .rounded(px(12)).textColor(look.fg_dim).textSize(px(12.5)).cursorPointer()
-                .hover(sb.bg(look.button_hover).textColor(look.fg))
-                .role(.button).ariaLabel("Skip setup")
-                .onClick(cx.listener(OnboardingView.onSkip))
-                .child("Skip"));
+            bar = bar.child(div().absolute().right(px(14)).top(px(0)).h(px(h)).flex().itemsCenter()
+                .child(button(look, .skip, "Skip", true, cx)));
         }
         _ = w;
         return bar;
@@ -537,10 +533,10 @@ pub const OnboardingView = struct {
         };
         var row = div().flex().flexNone().flexRow().itemsCenter().h(px(64)).px(px(28)).pb(px(6)).wFull();
         if (step != .hello and step != .done) {
-            row = row.child(pushButton(look, .back, "Back", true, cx));
+            row = row.child(button(look, .back, "Back", true, cx));
         }
         row = row.child(div().flex1());
-        return row.child(primaryButton(look, "ob-next", label, cx.listener(OnboardingView.onNext)));
+        return row.child(button(look, .next, label, true, cx));
     }
 
     // ---- steps -----------------------------------------------------------------------------
@@ -550,7 +546,7 @@ pub const OnboardingView = struct {
         return switch (ob.step) {
             .hello => stack(self.stage(look, 226), "Hi, I'm your typebud!", "I'll sit in a corner of your screen and tap along on my little keyboard whenever you type.", look, null),
             .buddy => stack(self.cards(w, look, cx, tb), "Who's your buddy?", "Pick a friend to keep you company. You can always swap later in Settings.", look, null),
-            .vibe => stack(self.stage(look, 176), "Pick a vibe", "Choose the colors for my keyboard, and add a little extra if you like.", look, zpui.intoAnyElement(vibeRow(look, cx, tb))),
+            .vibe => stack(self.stage(look, 158), "Pick a vibe", "Choose the colors for my keyboard, and add a little extra if you like.", look, zpui.intoAnyElement(vibeRow(look, cx, tb))),
             .sounds => stack(self.stage(look, 168), "Want clicky sounds?", "I can play soft mechanical clicks as you type, and I'll hush on my own while you're on a call.", look, zpui.intoAnyElement(soundRow(look, cx, tb, s))),
             .typing => stack(self.stage(look, 146), "Try typing!", "Type anything below and watch me tap along. Type really fast and I get excited!", look, zpui.intoAnyElement(self.typingBox(w, look, cx.entity(), tb))),
             .done => stack(self.stage(look, 226), "All set! I'll be waiting in the corner.", doneText(tb), look, null),
@@ -837,18 +833,11 @@ pub const OnboardingView = struct {
         w.startWindowMove();
     }
 
-    fn onSkip(_: *OnboardingView, _: *const zpui.ClickEvent, _: *Window, _: *Context(OnboardingView)) void {
-        finish(app_mod.instance);
-    }
-
-    fn onNext(_: *OnboardingView, _: *const zpui.ClickEvent, _: *Window, cx: *Context(OnboardingView)) void {
-        next(app_mod.instance);
-        cx.notify();
-    }
-
     fn onButton(_: *OnboardingView, b: Btn, cx: *Context(OnboardingView)) void {
         const tb = app_mod.instance;
         switch (b) {
+            .next => next(tb),
+            .skip => return finish(tb),
             .back => goTo(tb, ob.step.prev()),
             .play => {
                 tb.previewPack();
@@ -883,14 +872,21 @@ pub const OnboardingView = struct {
         cx.notify();
     }
 
-    fn onAccessory(_: *OnboardingView, i: u8, _: *const zpui.ClickEvent, _: *Window, cx: *Context(OnboardingView)) void {
+    fn onHead(_: *OnboardingView, ev: *const zpui.NativeControlEvent, _: *Window, cx: *Context(OnboardingView)) void {
         const tb = app_mod.instance;
-        toggleAccessory(&tb.settings, @enumFromInt(@min(i, 2)));
-        // Holding coffee changes the idle pose; the preview follows the real config.
-        tb.settingsChanged();
-        ob.pet.setConfig(tb.now(), previewConfig(tb));
-        ob.pet.hop(tb.now());
-        rearm(tb);
+        tb.settings.head = switch (ev.index) {
+            1 => .headphones,
+            2 => .beanie,
+            else => .none,
+        };
+        accessoryChanged(tb);
+        cx.notify();
+    }
+
+    fn onCoffee(_: *OnboardingView, ev: *const zpui.NativeControlEvent, _: *Window, cx: *Context(OnboardingView)) void {
+        const tb = app_mod.instance;
+        if (ev.on != Accessory.coffee.isOn(&tb.settings)) toggleAccessory(&tb.settings, .coffee);
+        accessoryChanged(tb);
         cx.notify();
     }
 
@@ -916,6 +912,14 @@ const InputCtx = struct { focus: zpui.FocusHandle, entity: zpui.Entity(Onboardin
 
 fn registerInput(c: InputCtx, b: Bounds, w: *Window, _: *App) void {
     w.handleInput(c.focus, zpui.ElementInputHandler.init(c.entity, b));
+}
+
+fn accessoryChanged(tb: *Typebud) void {
+    // Holding coffee changes the idle pose; the preview follows the real config.
+    tb.settingsChanged();
+    ob.pet.setConfig(tb.now(), previewConfig(tb));
+    ob.pet.hop(tb.now());
+    rearm(tb);
 }
 
 fn next(tb: *Typebud) void {
@@ -976,30 +980,22 @@ fn vibeRow(look: prefs.Look, cx: *Context(OnboardingView), tb: *Typebud) zpui.Di
             .onClick(cx.listenerWith(@as(u8, @intCast(i)), OnboardingView.onVibe))
             .child(dot).child(div().fontWeight(if (on) 600 else 400).child(art.Vibe.labels[i])));
     }
-    var extras = div().id("ob-extras").flex().flexRow().gap(px(5)).role(.group).ariaLabel("Accessories");
-    const a = &tb.catalog.animals[tb.animal];
-    for (std.meta.tags(Accessory), 0..) |acc, i| {
-        const on = acc.isOn(s);
-        const available = switch (acc) {
-            .headphones => a.hasHeadItem(.headphones),
-            .beanie => a.hasHeadItem(.beanie),
-            .coffee => true,
-        };
-        var chip = div().id(.{ "ob-acc", i }).flex().itemsCenter().h(px(32)).px(px(11)).rounded(px(16)).textSize(px(12.5))
-            .bg(if (on) look.accent else look.card_bg).textColor(if (on) look.accent_fg else look.fg)
-            .border1().borderColor(if (on) look.accent else look.fg.alpha(0.1))
-            .role(.check_box).ariaLabel(Accessory.labels[i]).ariaToggled(on)
-            .child(Accessory.labels[i]);
-        if (available) {
-            chip = chip.cursorPointer().hover(sb.borderColor(look.accent.alpha(0.6))).onClick(cx.listenerWith(@as(u8, @intCast(i)), OnboardingView.onAccessory));
-        } else chip = chip.opacity(look.disabled_opacity);
-        extras = extras.child(chip);
-    }
-    return div().flex().flexRow().itemsCenter().gap(px(9))
+    // Extras as real controls: one head item (segmented) and a coffee to hold (checkbox).
+    const head_sel: ?u32 = switch (s.head) {
+        .none => 0,
+        .headphones => 1,
+        .beanie => 2,
+        else => null,
+    };
+    const extras = div().flex().flexRow().itemsCenter().gap(px(14))
+        .child(zpui.nativeSegmented("ob-head", .{ .items = &head_labels, .selected = head_sel, .label = "Head item" }, cx.listener(OnboardingView.onHead), null))
+        .child(zpui.nativeCheckbox("ob-coffee", .{ .on = s.held == .coffee, .label = "Coffee", .title = "Coffee" }, cx.listener(OnboardingView.onCoffee), null));
+    return div().flex().flexCol().itemsCenter().gap(px(10))
         .child(swatches)
-        .child(div().w(px(1)).h(px(22)).bg(look.separator))
         .child(extras);
 }
+
+const head_labels = [_][]const u8{ "No Hat", "Headphones", "Beanie" };
 
 fn soundRow(look: prefs.Look, cx: *Context(OnboardingView), tb: *Typebud, s: *const Settings) zpui.Div {
     const sel: ?u32 = if (tb.library.indexOf(s.pack.slice())) |i| (if (i < ob.pack_count) @intCast(i) else null) else null;
@@ -1009,7 +1005,7 @@ fn soundRow(look: prefs.Look, cx: *Context(OnboardingView), tb: *Typebud, s: *co
         .child(zpui.nativeSwitch("ob-sound", .{ .on = s.sound, .label = "Clicky sounds" }, cx.listener(OnboardingView.onSound), null))
         .child(div().w(px(1)).h(px(20)).bg(look.separator))
         .child(zpui.nativePopup("ob-pack", .{ .items = ob.pack_names[0..ob.pack_count], .selected = sel, .label = "Sound Pack", .width = px(178), .enabled = s.sound }, cx.listener(OnboardingView.onPack), null))
-        .child(pushButton(look, .play, "Play", s.sound, cx));
+        .child(button(look, .play, "Play", s.sound, cx));
 }
 
 const linux_input_command = "sudo usermod -aG input $USER";
@@ -1062,29 +1058,42 @@ fn lookOf(w: *Window) prefs.Look {
     return look;
 }
 
-const Btn = enum(u8) { back, play };
+const Btn = enum(u8) { next, back, skip, play };
 
-/// A push button: an NSButton on macOS where zpui has native buttons, else drawn in the
-/// desktop's style (the same look as the Settings window's buttons).
-fn pushButton(look: prefs.Look, b: Btn, label: []const u8, enabled: bool, cx: *Context(OnboardingView)) zpui.AnyElement {
+/// Every button is a real push button (`zpui.nativeButton`): AppKit on macOS (the step's
+/// main action with the Liquid Glass bezel on macOS 26+), common controls on Windows,
+/// drawn Adwaita / Breeze ones on Linux. The drawn fallback only shows where a platform
+/// has none of those. Return triggers the main action (`onKey`).
+fn button(look: prefs.Look, b: Btn, label: []const u8, enabled: bool, cx: *Context(OnboardingView)) zpui.AnyElement {
     const id = switch (b) {
+        .next => "ob-next",
         .back => "ob-back",
+        .skip => "ob-skip",
         .play => "ob-play",
     };
-    const mac = look.family == .macos;
-    var d = div().id(id).flex().itemsCenter().justifyCenter().h(px(if (mac) 24 else look.control_height)).px(px(if (mac) 12 else 16))
-        .rounded(px(look.button_radius)).bg(look.button_bg).textColor(look.fg).role(.button).ariaLabel(label)
-        .fontWeight(if (look.family == .adwaita) 700 else 400);
-    if (look.family != .adwaita) d = d.border1().borderColor(look.outline);
-    if (mac) d = d.shadowSm();
+    const fallback = drawnButton(look, id, label, enabled, b == .next, cx.listenerWith(b, OnboardingView.onButtonClick));
+    if (comptime !@hasDecl(zpui, "nativeButton")) return zpui.intoAnyElement(fallback);
+    return zpui.intoAnyElement(zpui.nativeButton(id, .{
+        .title = label,
+        .enabled = enabled,
+        .bezel = if (b == .next) .glass else .push,
+        .size = switch (b) {
+            .next => .large,
+            .skip => .small,
+            else => .regular,
+        },
+        .width = if (b == .next) px(112) else null,
+    }, cx.listenerWith(b, OnboardingView.onButtonPress), fallback));
+}
+
+fn drawnButton(look: prefs.Look, id: []const u8, label: []const u8, enabled: bool, primary: bool, listener: anytype) zpui.StatefulDiv {
+    var d = div().id(id).flex().itemsCenter().justifyCenter().h(px(look.control_height)).px(px(16))
+        .rounded(px(look.button_radius)).role(.button).ariaLabel(label)
+        .bg(if (primary) look.accent else look.button_bg).textColor(if (primary) look.accent_fg else look.fg);
     if (enabled) {
-        d = d.cursorPointer().hover(sb.bg(look.button_hover)).active(sb.bg(look.button_active)).onClick(cx.listenerWith(b, OnboardingView.onButtonClick));
+        d = d.cursorPointer().hover(sb.opacity(0.9)).onClick(listener);
     } else d = d.opacity(look.disabled_opacity);
-    d = d.child(label);
-    if (comptime @hasDecl(zpui, "nativeButton")) {
-        if (mac) return zpui.intoAnyElement(zpui.nativeButton(id, .{ .title = label, .enabled = enabled, .bezel = .glass }, cx.listenerWith(b, OnboardingView.onButtonPress), d));
-    }
-    return zpui.intoAnyElement(d);
+    return d.child(label);
 }
 
 /// Soft pastel stage behind the pet, per vibe (dimmed for dark mode).
@@ -1103,17 +1112,6 @@ fn stageColors(v: art.Vibe, dark: bool) [2]Hsla {
 
 fn caret(look: prefs.Look, focused: bool) zpui.Div {
     return div().w(px(2)).h(px(17)).mx(px(1)).rounded(px(1)).bg(if (focused) look.accent else look.fg_dim.alpha(0.4));
-}
-
-/// The step's main action: an accent pill.
-fn primaryButton(look: prefs.Look, id: []const u8, label: []const u8, listener: anytype) zpui.StatefulDiv {
-    const h: f32 = if (look.family == .macos) 30 else @max(look.control_height, 34);
-    return div().id(id).flex().itemsCenter().justifyCenter().h(px(h)).minW(px(104)).px(px(20)).roundedFull()
-        .bg(look.accent).textColor(look.accent_fg).fontWeight(600).textSize(px(13.5)).shadowSm().cursorPointer()
-        .hover(sb.opacity(0.92)).active(sb.opacity(0.8))
-        .role(.button).ariaLabel(label)
-        .onClick(listener)
-        .child(label);
 }
 
 // ---- tests ------------------------------------------------------------------------------
