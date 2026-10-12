@@ -1,4 +1,26 @@
-# Releasing: installers
+# Releasing
+
+## Cutting a release
+
+Bump `.version` in `build.zig.zon` and push it to `main`. `.github/workflows/tag-release.yml`
+then pushes the matching `v<version>` tag, and the tag starts `release.yml`, which builds every
+platform, signs the update manifest and publishes the release. Versions with a pre-release
+suffix (`0.3.0-beta.1`) go to the beta channel.
+
+The tag is pushed with the repository secret `TYPEBUD_RELEASE_TOKEN`, which you create once:
+
+1. On GitHub, open **Settings → Developer settings → Personal access tokens → Fine-grained
+   tokens → Generate new token**.
+2. Limit it to the `plyght/typebud` repository, and under **Repository permissions** set
+   **Contents** and **Workflows** to **Read and write**. Pick whatever expiry you're happy with.
+3. In the repository, open **Settings → Secrets and variables → Actions → New repository
+   secret**, name it `TYPEBUD_RELEASE_TOKEN` and paste the token.
+
+The built-in `GITHUB_TOKEN` can't stand in for it, because GitHub won't let it create a tag on a
+commit that contains workflow files, and a tag it pushes wouldn't start `release.yml` anyway.
+Without the secret, the tag job fails with the `git tag` command to run by hand.
+
+## Installers
 
 The zip/tarball artifacts that the updater consumes (`typebud-macos-universal.zip`,
 `typebud-windows-x86_64.zip`, `typebud-linux-*`) stay as they are. The installers below are
