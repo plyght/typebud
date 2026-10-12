@@ -785,16 +785,18 @@ pub const Typebud = struct {
             return;
         }
         // macOS: System Settings' window: full-size content under a transparent, hidden
-        // title and an empty unified toolbar (traffic lights centred in the toolbar band
-        // over the sidebar), no separator, non-opaque for the sidebar material, frame
-        // remembered across launches.
+        // title and an empty unified toolbar, no separator, AppKit's own sidebar
+        // (NSSplitViewController source list, full height under the traffic lights;
+        // zpui draws the detail pane), frame remembered across launches.
         const handle = self.app.openWindow(.{
             .bounds = .{ .origin = .{ .x = 120, .y = 120 }, .size = if (mac) settings_view.mac_window_size else settings_view.window_size },
             .titlebar = if (mac) .{ .title = "typebud Settings", .appears_transparent = true, .toolbar = .unified, .separator = .none } else null,
             .app_id = if (mac) bundle_id else app_id,
             .min_size = if (mac) settings_view.mac_min_size else settings_view.window_size,
-            .background = if (mac) .transparent else .opaque_,
+            // The native sidebar draws its own material: the window stays opaque.
+            .background = .opaque_,
             .frame_autosave_name = if (mac and !self.options.ephemeral) "typebud.settings" else null,
+            .sidebar = if (mac) .{ .width = 215, .min_width = 190, .max_width = 280 } else null,
         }, settings_view.SettingsView, settings_view.SettingsView.init, .{}) catch |e| {
             std.log.err("settings window: {t}", .{e});
             return;

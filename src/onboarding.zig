@@ -1092,7 +1092,7 @@ fn lookOf(w: *Window) prefs.Look {
 const Btn = enum(u8) { next, back, skip, play };
 
 /// Every button is a real push button (`zpui.nativeButton`): AppKit on macOS (the step's
-/// main action with the Liquid Glass bezel on macOS 26+), common controls on Windows,
+/// main action a prominent, accent-tinted Liquid Glass button on macOS 26+), common controls on Windows,
 /// drawn Adwaita / Breeze ones on Linux. The drawn fallback only shows where a platform
 /// has none of those. Return triggers the main action (`onKey`).
 fn button(look: prefs.Look, b: Btn, label: []const u8, enabled: bool, cx: *Context(OnboardingView)) zpui.AnyElement {
@@ -1108,6 +1108,9 @@ fn button(look: prefs.Look, b: Btn, label: []const u8, enabled: bool, cx: *Conte
         .title = label,
         .enabled = enabled,
         .bezel = if (b == .next) .glass else .push,
+        // The step's main action: macOS 26+ accent-tinted glass (an untinted glass bezel
+        // is a pale, nearly white capsule in light mode).
+        .prominent = b == .next,
         .size = switch (b) {
             .next => .large,
             .skip => .small,

@@ -1,6 +1,6 @@
 //! The settings window: a section sidebar and one `zpui.prefs` page per section, so each
 //! desktop gets its own look — real AppKit controls in a System Settings grouped form on
-//! macOS (Liquid Glass sidebar on macOS 26+), libadwaita / Breeze drawn controls on Linux
+//! macOS (AppKit's own NSSplitViewController sidebar), libadwaita / Breeze drawn controls on Linux
 //! (`Window.setDesktopControls(true)`), Windows native controls once that backend lands.
 
 const std = @import("std");
@@ -113,6 +113,7 @@ pub const SettingsView = struct {
     const sidebar_w: f32 = 220;
 
     fn renderMac(self: *SettingsView, window: *Window, cx: *Context(SettingsView)) zpui.Div {
+        if (comptime has_native_sidebar) if (window.hasNativeSidebar()) return self.renderMacNative(window, cx);
         const tb = app_mod.instance;
         const look = macLook(window);
         const sec = tb.settings_section;
@@ -156,6 +157,41 @@ pub const SettingsView = struct {
             // The form's 20 pt top margin less 8: the first section sits 12 pt under the band.
             .child(div().flex1().minH(px(0)).mt(px(-8)).child(self.page(window, look, cx, sec)));
         return root.child(detail);
+    }
+
+    // The native sidebar (zpui with `Window.nativeSidebar`; app.zig opens the window with
+    // `.sidebar`): AppKit's NSSplitViewController sidebar with a source list, so the
+    // running macOS draws its own (macOS 27's on 27, the floating glass pane on 26).
+    // zpui is the detail pane: the page title in the toolbar band, then the form.
+
+    /// zpui with the native sidebar API (`WindowOptions.sidebar`, `Window.nativeSidebar`).
+    pub const has_native_sidebar = @hasDecl(zpui, "SidebarItem") and @hasDecl(Window, "nativeSidebar");
+
+    const native_rows = if (has_native_sidebar) blk: {
+        var rows: [Section.labels.len]zpui.SidebarItem = undefined;
+        for (&rows, 0..) |*r, i| r.* = .{ .title = Section.labels[i], .symbol = Section.symbols[i], .badge = Section.badges[i] };
+        break :blk rows;
+    } else {};
+
+    fn renderMacNative(self: *SettingsView, window: *Window, cx: *Context(SettingsView)) zpui.Div {
+        const tb = app_mod.instance;
+        const look = macLook(window);
+        const sec = tb.settings_section;
+        _ = window.nativeSidebar(.{ .items = &native_rows, .selected = @intFromEnum(sec), .label = "Sections" }, cx.listener(SettingsView.onNativeSection));
+        const family = zpui.desktop_controls.fontFamily(window, look);
+        const title = div().id("page-title").flex().flexNone().itemsCenter().h(px(band_h)).px(px(20))
+            .textSize(px(15)).fontWeight(700).textColor(look.fg).role(.heading).child(Section.labels[@intFromEnum(sec)]);
+        return div().size(zpui.relative(1)).flex().flexCol().overflowHidden().bg(look.window_bg)
+            .fontFamily(family).textSize(px(13)).textColor(look.fg)
+            .onKeyDown(cx.listener(SettingsView.onKey))
+            .child(title)
+            .child(div().flex1().minH(px(0)).mt(px(-8)).child(self.page(window, look, cx, sec)));
+    }
+
+    fn onNativeSection(_: *SettingsView, ev: *const zpui.SidebarEvent, _: *Window, cx: *Context(SettingsView)) void {
+        if (ev.index >= Section.labels.len) return;
+        app_mod.instance.settings_section = @enumFromInt(ev.index);
+        cx.notify();
     }
 
     fn macSidebarRows(_: *SettingsView, window: *Window, look: prefs.Look, cx: *Context(SettingsView), sec: Section, glass: bool) zpui.StatefulDiv {
