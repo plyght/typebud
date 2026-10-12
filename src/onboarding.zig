@@ -580,7 +580,7 @@ pub const OnboardingView = struct {
         if (say) |text| {
             // Next to the head, as the stage canvas centers the pet.
             const a = &tb.catalog.animals[tb.animal];
-            const unit = (h + 8) / 256;
+            const unit = (h - 2) / 256;
             const x = content_w / 2 + (a.anchors.head.cx - 128 + a.anchors.head.rx + 6) * unit;
             const y = @max(8, (a.anchors.head.cy - a.anchors.head.ry - 18) * unit);
             const ink = zpui.rgb(0x3b2a1e).toHsla();
@@ -684,9 +684,9 @@ pub const OnboardingView = struct {
         const twinkles = [_][4]f32{ .{ 0.11, 0.26, 16, 0.9 }, .{ 0.88, 0.2, 12, 0.75 }, .{ 0.8, 0.78, 18, 0.85 }, .{ 0.17, 0.8, 11, 0.6 }, .{ 0.95, 0.52, 8, 0.5 }, .{ 0.05, 0.55, 8, 0.45 } };
         for (twinkles) |t| self.paintStar(w, b.origin.x + t[0] * b.size.width, b.origin.y + t[1] * b.size.height, t[2], t[3]);
 
-        const size = b.size.height + 8;
+        const size = b.size.height - 2;
         const ox = b.origin.x + (b.size.width - size) / 2;
-        const oy = b.origin.y + (b.size.height - size) / 2 + 6;
+        const oy = b.origin.y + (b.size.height - size) / 2 + 3;
         const rp: u32 = @intFromFloat(@round(size * scale));
         self.stage_cache.atlas = w.sprite_atlas;
         self.stage_cache.retainOnly(tb.animal, tb.settings.vibe, rp);
