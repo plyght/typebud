@@ -209,8 +209,12 @@ jobs:
         # On macOS 27, AppKit's macOS 27 design needs a binary that declares the 27 SDK.
         # The build declares 27.0 either way (packaging/macos_sdk.zig); this links against it.
         run: |
-          xcode=$(ls -d /Applications/Xcode_27*.app /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1 || true)
-          if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
+          # The image's default Xcode (stable 27.0 on xcode-27); older images: newest Xcode 26.
+          sdk=$(xcrun --sdk macosx --show-sdk-version 2>/dev/null || echo 0)
+          if [ "${sdk%%.*}" -lt 26 ]; then
+            xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -viE 'beta|_rc' | sort -V | tail -n 1 || true)
+            if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
+          fi
           xcode-select -p
           xcrun --sdk macosx --show-sdk-version
       - name: Package Typebud.app (universal)

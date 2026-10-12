@@ -157,8 +157,12 @@ jobs:
         # On macOS 27, AppKit's macOS 27 design needs a binary that declares the 27 SDK.
         # The build declares 27.0 either way (packaging/macos_sdk.zig); this links against it.
         run: |
-          xcode=$(ls -d /Applications/Xcode_27*.app /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1 || true)
-          if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
+          # The image's default Xcode (stable 27.0 on xcode-27); older images: newest Xcode 26.
+          sdk=$(xcrun --sdk macosx --show-sdk-version 2>/dev/null || echo 0)
+          if [ "${sdk%%.*}" -lt 26 ]; then
+            xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -viE 'beta|_rc' | sort -V | tail -n 1 || true)
+            if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
+          fi
           xcode-select -p
           xcrun --sdk macosx --show-sdk-version
 
@@ -172,7 +176,11 @@ jobs:
             -Dupdate-public-key="$UPDATE_PUBLIC_KEY" --prefix out/pkg --summary all
           exe=out/pkg/Typebud.app/Contents/MacOS/typebud
           lipo -info "$exe"
-          lipo "$exe" -verify_arch arm64 x86_64
+          # (Xcode 27's lipo rejects "lipo FILE -verify_arch arm64 x86_64".)
+          archs=" $(lipo -archs "$exe") "
+          for a in arm64 x86_64; do
+            [[ "$archs" == *" $a "* ]] || { echo "::error::$exe lacks $a (has$archs)"; exit 1; }
+          done
           scripts/check-macos-sdk.sh "$exe"
           plutil -lint out/pkg/Typebud.app/Contents/Info.plist
           test "$(plutil -extract CFBundleShortVersionString raw out/pkg/Typebud.app/Contents/Info.plist)" = "$VERSION"
