@@ -82,6 +82,8 @@ pub const Settings = struct {
     desk_plant: bool = false,
     desk_mug: bool = false,
     sparkles: bool = false,
+    /// A little words-per-minute bubble by the pet while typing.
+    show_wpm: bool = false,
     // Behavior
     size: f32 = 176,
     corner: Corner = .bottom_right,
@@ -175,6 +177,7 @@ const Json = struct {
     desk_plant: bool = false,
     desk_mug: bool = false,
     sparkles: bool = false,
+    show_wpm: bool = false,
     size: f32 = 176,
     corner: Corner = .bottom_right,
     margin_x: f32 = 16,
@@ -307,6 +310,7 @@ test "settings JSON round-trip" {
     _ = s.addApp("org.mozilla.firefox", "Firefox");
     _ = s.addApp("com.apple.Terminal", "Terminal");
     s.precise_input = true;
+    s.show_wpm = true;
     const json = try toJson(gpa, &s);
     defer gpa.free(json);
     const r = try fromJson(gpa, json);
@@ -322,6 +326,7 @@ test "settings JSON round-trip" {
     try std.testing.expectEqual(@as(u32, 2), r.app_count);
     try std.testing.expectEqualStrings("Terminal", r.apps[1].name.slice());
     try std.testing.expect(r.precise_input);
+    try std.testing.expect(r.show_wpm);
     try std.testing.expectEqual(VisibilityMode.hide_in, r.visibility);
 }
 
@@ -333,6 +338,7 @@ test "settings: unknown fields ignored, missing ones default, values clamped" {
     try std.testing.expectEqual(art.Vibe.bright, r.vibe);
     try std.testing.expectEqualStrings("cat", r.animal.slice());
     try std.testing.expect(r.keyboard);
+    try std.testing.expect(!r.show_wpm); // older files: off
 }
 
 test "settings save/load through the filesystem" {

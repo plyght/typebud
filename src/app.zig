@@ -30,6 +30,8 @@ const pack_import = @import("pack_import.zig");
 const placement = @import("placement.zig");
 const launch_at_login = @import("launch_at_login.zig");
 const onboarding = @import("onboarding.zig");
+const wpm_mod = @import("wpm.zig");
+const app_picker = @import("app_picker.zig");
 
 const App = zpui.App;
 const Window = zpui.Window;
@@ -83,6 +85,8 @@ pub const Typebud = struct {
     // pet
     pet_window: ?zpui.WindowId = null,
     state: pet_state.PetState = .{},
+    /// Typing speed for the "Show WPM" bubble (fed whether or not it is shown).
+    wpm: wpm_mod.Meter = .{},
     cache: raster.LayerCache,
     layout: legends.Layout = .{},
     anchor: platform.OverlayAnchor = .{},
@@ -122,6 +126,8 @@ pub const Typebud = struct {
     synth_key_up: bool = false,
     input_status: platform.InputMonitorStatus = .unsupported,
     import_message: settings_mod.Str(160) = .{},
+    /// Why the last "Choose App…" pick was not added ("" = fine).
+    app_message: settings_mod.Str(160) = .{},
 
     // timers
     armed_at: ?u64 = null,
@@ -339,6 +345,10 @@ pub const Typebud = struct {
         }
         if (prev != null and changed(prev, "launch_at_login", s.launch_at_login)) self.applyLaunchAtLogin();
         if (changed(prev, "auto_update", s.auto_update)) update_hook.setAutoCheck(s.auto_update);
+        // The meter runs either way: drop a stale bubble when it is switched on or off.
+        if (prev != null and changed(prev, "show_wpm", s.show_wpm)) {
+            if (s.show_wpm) _ = self.wpm.update(now_ns) else self.wpm.shown = null;
+        }
         if (changed(prev, "visibility", s.visibility) or changed(prev, "apps", s.apps) or changed(prev, "app_count", s.app_count)) self.evaluateRule();
         self.applied = s.*;
         self.updateTray();
@@ -506,10 +516,51 @@ pub const Typebud = struct {
         self.redrawSettings();
     }
 
-    /// Most recent foreground app not yet in the list (for the list's + button).
-    pub fn recentCandidate(self: *const Typebud) ?settings_mod.AppEntry {
-        for (self.recent[0..self.recent_len]) |r| if (!self.settings.hasApp(r.id.slice())) return r;
-        return null;
+    /// Recently used apps not yet in the list, most recent first (the list's add menu).
+    pub fn recentCandidates(self: *const Typebud, out: []settings_mod.AppEntry) usize {
+        var n: usize = 0;
+        for (self.recent[0..self.recent_len]) |r| {
+            if (n == out.len) break;
+            if (self.settings.hasApp(r.id.slice())) continue;
+            out[n] = r;
+            n += 1;
+        }
+        return n;
+    }
+
+    /// Add an app to the visibility list (from the recent apps or the picker).
+    pub fn addListedApp(self: *Typebud, entry: settings_mod.AppEntry) void {
+        self.app_message.set("");
+        if (self.settings.hasApp(entry.id.slice())) {
+            var buf: [160]u8 = undefined;
+            self.app_message.set(std.fmt.bufPrint(&buf, "{s} is already in the list", .{entry.name.slice()}) catch "Already in the list");
+            self.redrawSettings();
+            return;
+        }
+        if (!self.settings.addApp(entry.id.slice(), entry.name.slice())) {
+            self.app_message.set("The list is full");
+            self.redrawSettings();
+            return;
+        }
+        self.settingsChanged();
+    }
+
+    /// "Choose App…": the native open dialog for an application (app_picker.zig).
+    pub fn chooseApp(self: *Typebud) void {
+        self.app.platform.promptForPaths(app_picker.promptOptions(), .{ .ctx = self, .func = onAppPicked });
+    }
+
+    fn onAppPicked(ctx: ?*anyopaque, paths: ?[]const []const u8) void {
+        const self: *Typebud = @ptrCast(@alignCast(ctx.?));
+        const list = paths orelse return;
+        if (list.len == 0) return;
+        const entry = app_picker.identify(self.gpa, self.io, list[0]) catch |e| {
+            std.log.warn("choose app {s}: {t}", .{ list[0], e });
+            self.app_message.set(app_picker.describe(e));
+            self.redrawSettings();
+            return;
+        };
+        self.addListedApp(entry);
     }
 
     fn evaluateRule(self: *Typebud) void {
@@ -546,6 +597,7 @@ pub const Typebud = struct {
                 // key_x 0.5 is the backends' "unknown"; the macOS counter alternates itself.
                 const kx: ?f32 = if (e.key_x == 0.5 and e.key == .other) null else e.key_x;
                 self.state.onKey(.{ .key = @enumFromInt(@intFromEnum(e.key)), .key_x = kx, .t = now_ns });
+                if (wpm_mod.countsKey(e.key)) _ = self.wpm.onKey(now_ns);
                 // The welcome's try-it field plays its own key sounds (exactly once per key).
                 if (!self.soundMuted() and !onboarding.ownsKeySounds(self)) self.playKeySound(sound.poolForClass(e.key));
                 self.rearm();
@@ -586,10 +638,12 @@ pub const Typebud = struct {
     /// already armed). Nothing is armed while the pet sleeps or with reduced motion.
     pub fn rearm(self: *Typebud) void {
         const now_ns = self.now();
-        const d = self.state.nextDeadline(now_ns) orelse return;
+        const pet_d = self.state.nextDeadline(now_ns);
+        const wpm_d = if (self.settings.show_wpm) self.wpm.deadline() else null;
+        const d = if (pet_d != null and wpm_d != null) @min(pet_d.?, wpm_d.?) else pet_d orelse wpm_d orelse return;
         if (self.armed_at) |a| if (a <= d and a > now_ns) return;
         self.armed_at = d;
-        self.app.platform.dispatcher().dispatchAfter(d - now_ns, .{ .ctx = self, .run = onPetTimer });
+        self.app.platform.dispatcher().dispatchAfter(d -| now_ns, .{ .ctx = self, .run = onPetTimer });
     }
 
     fn onPetTimer(ctx: *anyopaque) void {
@@ -598,7 +652,9 @@ pub const Typebud = struct {
         if (self.armed_at) |a| if (now_ns + std.time.ns_per_ms >= a) {
             self.armed_at = null;
         };
-        if (self.state.update(now_ns) and self.isShown()) self.redrawPet();
+        const pet_changed = self.state.update(now_ns);
+        const wpm_changed = self.wpm.update(now_ns) and self.settings.show_wpm;
+        if ((pet_changed or wpm_changed) and self.isShown()) self.redrawPet();
         self.rearm();
     }
 

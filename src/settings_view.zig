@@ -48,10 +48,10 @@ pub const Section = enum {
     pub const badges = [_]u32{ 0xff9500, 0xaf52de, 0x007aff, 0xff3b30, 0x30b0c7, 0x8e8e93, 0xff2d55 };
 };
 
-const Toggle = enum(u8) { keyboard, desk_plant, desk_lamp, desk_mug, sparkles, animations, sound, key_up, mute_other_audio, mute_mic, remember_visible, launch_at_login, precise_input, auto_update };
-const Choice = enum(u8) { vibe, head, held, corner, display, sleep, sensitivity, pack, visibility, size_preset };
+const Toggle = enum(u8) { keyboard, desk_plant, desk_lamp, desk_mug, sparkles, animations, sound, key_up, mute_other_audio, mute_mic, remember_visible, launch_at_login, precise_input, auto_update, show_wpm };
+const Choice = enum(u8) { vibe, head, held, corner, display, sleep, sensitivity, pack, visibility, size_preset, recent_app };
 const Value = enum(u8) { size, volume };
-const Action = enum(u8) { preview, import, check, welcome };
+const Action = enum(u8) { preview, import, check, welcome, choose_app, add_recent };
 
 const sleep_choices = [_]u32{ 0, 30, 60, 120, 300, 600 };
 const sleep_labels = [_][]const u8{ "Never", "30 seconds", "1 minute", "2 minutes", "5 minutes", "10 minutes" };
@@ -65,6 +65,10 @@ pub const SettingsView = struct {
     icons: [art.max_animals]?raster.Image = @splat(null),
     icon_px: u32 = 0,
     app_items: [settings_mod.max_apps]prefs.ListItem = undefined,
+    /// Recent apps offered by the add menu (macOS) / the Recent Apps popup, as shown.
+    recent_apps: [8]settings_mod.AppEntry = undefined,
+    recent_len: usize = 0,
+    recent_pick: u32 = 0,
 
     pub fn init(window: *Window, _: *Context(SettingsView)) SettingsView {
         window.setDesktopControls(true);
@@ -394,6 +398,9 @@ pub const SettingsView = struct {
                 prefs.row("Fall Asleep After", "Idle time before the pet naps", zpui.nativePopup("sleep", .{ .items = &sleep_labels, .selected = sleep_sel, .label = "Fall Asleep After", .width = px(160), .enabled = s.animations }, cx.listenerWith(Choice.sleep, SettingsView.onChoice), null)),
                 prefs.row("Excitement", zpui.fmt("Gets excited above {d:.0} words per minute", .{s.sensitivity.wpm()}), zpui.nativeSegmented("sensitivity", .{ .items = &settings_mod.Sensitivity.labels, .selected = @intFromEnum(s.sensitivity), .label = "Excitement", .enabled = s.animations }, cx.listenerWith(Choice.sensitivity, SettingsView.onChoice), null)),
             } },
+            .{ .title = "Typing Speed", .rows = &.{
+                prefs.row("Show WPM", "Your words per minute in a little bubble by the pet", sw("show-wpm", s.show_wpm, "Show WPM", cx, .show_wpm)),
+            } },
         });
     }
 
@@ -451,18 +458,44 @@ pub const SettingsView = struct {
             .everywhere, .only_in => "Only Show in These Apps",
             .hide_in => "Hide in These Apps",
         };
-        return prefs.page(window, look, &.{
-            .{ .title = "Where to Show", .rows = &.{
-                prefs.row("Show typebud", fg, zpui.nativePopup("vis", .{ .items = &settings_mod.VisibilityMode.labels, .selected = @intFromEnum(s.visibility), .label = "Show typebud", .width = px(200) }, cx.listenerWith(Choice.visibility, SettingsView.onChoice), null)),
-                prefs.row("Remember Shown / Hidden", "Keep the tray's Show / Hide choice after a restart", sw("remember", s.remember_visible, "Remember Shown / Hidden", cx, .remember_visible)),
-            } },
-            .{ .title = list_title, .description = "+ adds the app you used most recently", .content = prefs.editableList(look, "apps", .{
-                .items = self.app_items[0..n],
-                .selected = sel,
-                .label = "Apps",
-                .add_label = "Add Recent App…",
-            }, cx.listener(SettingsView.onApps)) },
-        });
+        self.recent_len = tb.recentCandidates(&self.recent_apps);
+        // macOS: + opens a menu of recent apps and "Choose App…" (System Settings' way).
+        // Elsewhere the add button opens the picker and recent apps get their own row.
+        const menu = look.family == .macos and zpui.contextMenusAvailable(window);
+        const hint = if (menu)
+            "+ picks any app, or one you used recently"
+        else if (builtin.os.tag == .windows)
+            "Choose any program, or add one you switched to recently"
+        else
+            "Choose any installed app, or add one you switched to recently";
+        const desc = if (tb.app_message.len > 0) tb.app_message.slice() else hint;
+        const list_section: prefs.Group = .{ .title = list_title, .description = desc, .content = prefs.editableList(look, "apps", .{
+            .items = self.app_items[0..n],
+            .selected = sel,
+            .label = "Apps",
+            .add_label = if (menu) "Add App" else "Choose App…",
+        }, cx.listener(SettingsView.onApps)) };
+        const where_rows = [_]prefs.Row{
+            prefs.row("Show typebud", fg, zpui.nativePopup("vis", .{ .items = &settings_mod.VisibilityMode.labels, .selected = @intFromEnum(s.visibility), .label = "Show typebud", .width = px(200) }, cx.listenerWith(Choice.visibility, SettingsView.onChoice), null)),
+            prefs.row("Remember Shown / Hidden", "Keep the tray's Show / Hide choice after a restart", sw("remember", s.remember_visible, "Remember Shown / Hidden", cx, .remember_visible)),
+        };
+        const where: prefs.Group = .{ .title = "Where to Show", .rows = &where_rows };
+        if (menu) return prefs.page(window, look, &.{ where, list_section });
+
+        const fa = zpui.frameAllocator();
+        const names: [][]const u8 = fa.alloc([]const u8, @max(self.recent_len, 1)) catch @panic("OOM");
+        names[0] = "None Yet";
+        for (self.recent_apps[0..self.recent_len], 0..) |*a, i| names[i] = a.name.slice();
+        const has = self.recent_len > 0;
+        self.recent_pick = @min(self.recent_pick, @as(u32, @intCast(names.len - 1)));
+        const recent_row = div().flex().flexRow().itemsCenter().gap(px(8))
+            .child(zpui.nativePopup("recent-app", .{ .items = names, .selected = self.recent_pick, .label = "Recent Apps", .width = px(180), .enabled = has }, cx.listenerWith(Choice.recent_app, SettingsView.onChoice), null))
+            .child(button(look, .add_recent, "Add", has, cx));
+        const recent_rows = [_]prefs.Row{
+            prefs.row("Recent Apps", if (has) "Apps you used since typebud started" else "Apps you switch to show up here", recent_row),
+        };
+        const recent_section: prefs.Group = .{ .rows = &recent_rows };
+        return prefs.page(window, look, &.{ where, list_section, recent_section });
     }
 
     // ---- system ---------------------------------------------------------------------------
@@ -532,8 +565,9 @@ pub const SettingsView = struct {
         cx.notify();
     }
 
-    fn onChoice(_: *SettingsView, c: Choice, ev: *const Ev, cx: *Context(SettingsView)) void {
+    fn onChoice(self: *SettingsView, c: Choice, ev: *const Ev, cx: *Context(SettingsView)) void {
         const tb = app_mod.instance;
+        const self_pick = &self.recent_pick;
         const s = &tb.settings;
         const i = ev.index;
         switch (c) {
@@ -558,6 +592,11 @@ pub const SettingsView = struct {
             .pack => if (i < tb.library.packs.items.len) s.pack.set(tb.library.packs.items[i].id),
             .visibility => s.visibility = @enumFromInt(@min(i, 2)),
             .size_preset => s.size = settings_mod.size_presets[@min(i, 2)],
+            .recent_app => {
+                self_pick.* = i;
+                cx.notify();
+                return;
+            },
         }
         tb.settingsChanged();
         if (c == .pack) tb.previewPack();
@@ -574,14 +613,11 @@ pub const SettingsView = struct {
         cx.notify();
     }
 
-    fn onApps(self: *SettingsView, ev: *const prefs.ListEvent, cx: *Context(SettingsView)) void {
+    fn onApps(self: *SettingsView, ev: *const prefs.ListEvent, window: *Window, cx: *Context(SettingsView)) void {
         const tb = app_mod.instance;
         switch (ev.*) {
             .select => |i| self.selected_app = i,
-            .add => if (tb.recentCandidate()) |r| {
-                _ = tb.settings.addApp(r.id.slice(), r.name.slice());
-                tb.settingsChanged();
-            },
+            .add => self.showAddMenu(window, cx),
             .remove => |i| {
                 tb.settings.removeApp(i);
                 self.selected_app = null;
@@ -591,8 +627,45 @@ pub const SettingsView = struct {
         cx.notify();
     }
 
-    fn onAction(_: *SettingsView, a: Action, cx: *Context(SettingsView)) void {
+    /// The + menu: recent apps (tag = index) and "Choose App…"; straight to the picker
+    /// where there are no native menus or nothing recent to offer.
+    fn showAddMenu(self: *SettingsView, window: *Window, cx: *Context(SettingsView)) void {
+        const tb = app_mod.instance;
+        self.recent_len = tb.recentCandidates(&self.recent_apps);
+        if (self.recent_len == 0 or !zpui.contextMenusAvailable(window)) return tb.chooseApp();
+        var items: [12]zpui.ContextMenuItem = undefined;
+        var k: usize = 0;
+        items[k] = .header("Recently Used");
+        k += 1;
+        for (self.recent_apps[0..self.recent_len], 0..) |*a, i| {
+            items[k] = .action(a.name.slice(), @intCast(i));
+            k += 1;
+        }
+        items[k] = .separator;
+        k += 1;
+        items[k] = .action("Choose App…", choose_tag);
+        k += 1;
+        if (!zpui.showContextMenu(window, window.mousePosition(), items[0..k], cx.listener(SettingsView.onAddMenu))) tb.chooseApp();
+    }
+
+    const choose_tag: u32 = 1000;
+
+    fn onAddMenu(self: *SettingsView, sel: *const zpui.ContextMenuSelection, _: *Window, cx: *Context(SettingsView)) void {
+        const tb = app_mod.instance;
+        const tag = sel.tag orelse return;
+        if (tag == choose_tag) return tb.chooseApp();
+        if (tag < self.recent_len) tb.addListedApp(self.recent_apps[tag]);
+        cx.notify();
+    }
+
+    fn onAction(self: *SettingsView, a: Action, cx: *Context(SettingsView)) void {
         switch (a) {
+            .choose_app => app_mod.instance.chooseApp(),
+            .add_recent => if (self.recent_pick < self.recent_len) {
+                app_mod.instance.addListedApp(self.recent_apps[self.recent_pick]);
+                self.recent_pick = 0;
+                cx.notify();
+            },
             .preview => app_mod.instance.previewPack(),
             .import => app_mod.instance.importPack(),
             .check => {

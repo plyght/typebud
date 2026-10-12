@@ -24,9 +24,43 @@ pub const PetView = struct {
     }
 
     pub fn render(_: *PetView, _: *Window, _: *zpui.Context(PetView)) zpui.Div {
-        return zpui.div().size(zpui.relative(1)).child(zpui.canvas(app_mod.instance, paint).size(zpui.relative(1)));
+        const tb = app_mod.instance;
+        var root = zpui.div().relative().size(zpui.relative(1)).child(zpui.canvas(tb, paint).size(zpui.relative(1)));
+        // The bubble steps aside for the resize grip while the pointer is over the pet.
+        if (tb.settings.show_wpm and !tb.hovered and tb.drag == .none) if (tb.wpm.shown) |v| {
+            root = root.child(wpmBubble(tb, v));
+        };
+        return root;
     }
 };
+
+/// The "Show WPM" bubble: a little rounded pill in the window's top-left corner (clear
+/// of every animal's head, the headphones' notes and the excited arms), in the keycap
+/// font, sized with the pet but never below a legible 9 px. Drawn text, not part of the
+/// input region, so clicks still pass through around the pet.
+pub fn wpmBubble(tb: *Typebud, value: u16) zpui.Div {
+    const size = tb.petSize();
+    const h = std.math.clamp(size * 0.105, 16, 30);
+    const font = h * 0.6;
+    const inset = @round(@max(size * 0.03, 3));
+    const c = bubbleColors(tb.settings.vibe);
+    return zpui.div().absolute().left(zpui.px(inset)).top(zpui.px(inset)).h(zpui.px(h)).px(zpui.px(@round(h * 0.42)))
+        .flex().flexRow().itemsCenter().gap(zpui.px(@round(font * 0.28))).roundedFull()
+        .bg(c.bg).border1().borderColor(c.border).whitespaceNowrap()
+        .fontFamily("Nunito").fontWeight(800).textColor(c.fg).textSize(zpui.px(font))
+        .child(zpui.fmt("{d}", .{value}))
+        .child(zpui.div().textSize(zpui.px(@round(font * 0.78))).textColor(c.dim).child("wpm"));
+}
+
+const BubbleColors = struct { bg: zpui.Hsla, border: zpui.Hsla, fg: zpui.Hsla, dim: zpui.Hsla };
+
+fn bubbleColors(v: art.Vibe) BubbleColors {
+    return switch (v) {
+        .dark => .{ .bg = zpui.rgba(0x262a33eb).toHsla(), .border = zpui.rgba(0xffffff2e).toHsla(), .fg = zpui.rgb(0xf6f3ec).toHsla(), .dim = zpui.rgb(0xb4bac6).toHsla() },
+        .bright => .{ .bg = zpui.rgba(0xfffffff0).toHsla(), .border = zpui.rgba(0x3a3a4626).toHsla(), .fg = zpui.rgb(0x3a3a46).toHsla(), .dim = zpui.rgb(0x8a8a96).toHsla() },
+        .pink => .{ .bg = zpui.rgba(0xfff3f7f0).toHsla(), .border = zpui.rgba(0xd9578d40).toHsla(), .fg = zpui.rgb(0xc2457a).toHsla(), .dim = zpui.rgb(0xe08aae).toHsla() },
+    };
+}
 
 const Ctx = struct { tb: *Typebud };
 

@@ -187,6 +187,82 @@ fn sResized(tb: *Typebud) void {
     tb.settingsChanged();
 }
 
+// ---- the "Show WPM" bubble ------------------------------------------------------------
+
+/// Screenshot of the live pet window (what the bubble looks like on screen).
+fn shotPetWindow(tb: *Typebud, name: []const u8) void {
+    if (!st.screenshots) return;
+    const w = tb.petWindow() orelse return fail(tb, "pet window is gone", .{});
+    var pb: [128]u8 = undefined;
+    const path = std.fmt.bufPrint(&pb, out_dir ++ "/pet_window_{s}.png", .{name}) catch return;
+    const img = capture.captureWindow(tb.gpa, tb.io, w) catch |e| return note(tb, "pet window capture unavailable here: {t}", .{e});
+    defer tb.gpa.free(img.pixels);
+    snapshot.writeRgbaPng(tb.gpa, tb.io, path, img.pixels, img.width, img.height) catch |e| return fail(tb, "{s}: {t}", .{ path, e });
+    note(tb, "wrote {s} ({d}x{d})", .{ path, img.width, img.height });
+}
+
+fn sWpmSmall(tb: *Typebud) void {
+    tb.settings.show_wpm = true;
+    tb.settings.size = settings_min_size;
+    tb.settingsChanged();
+    st.typist.start(tb, .alternate, 32, 110); // ~110 WPM for ~3.5 s
+}
+
+fn expectWpm(tb: *Typebud, what: []const u8) void {
+    const v = tb.wpm.shown orelse return fail(tb, "{s}: no WPM bubble while typing", .{what});
+    note(tb, "{s}: bubble shows {d} wpm", .{ what, v });
+    if (v < 70 or v > 160) fail(tb, "{s}: {d} wpm, expected about 110", .{ what, v });
+}
+
+fn sWpmSmallShot(tb: *Typebud) void {
+    expectWpm(tb, "WPM at the smallest size");
+    shotPetWindow(tb, "wpm_small");
+    st.typist.stop();
+    tb.settings.size = settings_max_size;
+    tb.settings.animal.set("penguin");
+    tb.settings.vibe = .bright;
+    tb.settingsChanged();
+    st.typist.start(tb, .alternate, 32, 110);
+}
+
+fn sWpmLargeShot(tb: *Typebud) void {
+    expectWpm(tb, "WPM at the largest size");
+    shotPetWindow(tb, "wpm_large");
+}
+
+fn sWpmPinkShot(tb: *Typebud) void {
+    tb.settings.size = 176;
+    tb.settings.animal.set("capybara");
+    tb.settings.vibe = .pink;
+    tb.settingsChanged();
+    st.typist.start(tb, .alternate, 32, 110);
+}
+
+fn sWpmPinkShot2(tb: *Typebud) void {
+    expectWpm(tb, "WPM pink");
+    shotPetWindow(tb, "wpm_pink");
+}
+
+fn sWpmHidden(tb: *Typebud) void {
+    if (tb.wpm.shown) |v| fail(tb, "WPM bubble still showing {d} after typing stopped", .{v});
+    tb.settings.show_wpm = false;
+    tb.settings.animal.set("cat");
+    tb.settings.vibe = .dark;
+    tb.settingsChanged();
+}
+
+/// Recent apps and a listed one, so the Visibility page shows them.
+fn sSeedApps(tb: *Typebud) void {
+    tb.recent[0] = .{ .id = .init("org.mozilla.firefox"), .name = .init("Firefox") };
+    tb.recent[1] = .{ .id = .init("org.gnome.Terminal"), .name = .init("Terminal") };
+    tb.recent_len = 2;
+    _ = tb.settings.addApp("org.gnome.TextEditor", "Text Editor");
+    tb.settingsChanged();
+}
+
+const settings_min_size = @import("settings.zig").min_size;
+const settings_max_size = @import("settings.zig").max_size;
+
 /// Every animal × vibe, idle with accessories, into one sheet; plus each animal's frames.
 fn sMatrix(tb: *Typebud) void {
     if (!st.screenshots) return;
@@ -451,6 +527,13 @@ const pet_steps = [_]script.Step{
     .{ .wait_ms = 800, .run = sHold },
     .{ .wait_ms = 400, .run = sHoldShot },
     .{ .wait_ms = 800, .run = sResized },
+    .{ .run = sWpmSmall },
+    .{ .wait_ms = 2600, .run = sWpmSmallShot },
+    .{ .wait_ms = 2600, .run = sWpmLargeShot },
+    .{ .wait_ms = 1200, .run = sWpmPinkShot },
+    .{ .wait_ms = 2600, .run = sWpmPinkShot2 },
+    .{ .wait_ms = 4300, .run = sWpmHidden },
+    .{ .run = sSeedApps },
 };
 
 const welcome_end = [_]script.Step{

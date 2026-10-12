@@ -187,6 +187,8 @@ test {
     _ = @import("settings.zig");
     _ = @import("sound.zig");
     _ = @import("visibility.zig");
+    _ = @import("wpm.zig");
+    _ = @import("app_picker.zig");
     _ = @import("pack_import.zig");
     _ = @import("placement.zig");
     _ = @import("launch_at_login.zig");
