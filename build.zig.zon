@@ -1,6 +1,6 @@
 .{
     .name = .typebud,
-    .version = "0.1.2",
+    .version = "0.1.3",
     .fingerprint = 0xf88a70d101e1789,
     .minimum_zig_version = "0.17.0",
     .dependencies = .{
