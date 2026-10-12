@@ -3,6 +3,9 @@
 //! zig-out/smoke/ (live pet states, every animal × vibe with accessories, each animal's
 //! frame sheet, every settings section), checks that an idle (asleep) second draws no
 //! frames, and exits 0 — or 1 with the failures listed.
+//!
+//! `--no-screenshots` (CI on push): the same launch / typing / idle / settings / welcome
+//! checks in one look, with nothing captured or written but report.txt.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -36,6 +39,15 @@ const State = struct {
     look: usize = 0,
     welcome_step: usize = 0,
     welcome_look: usize = 0,
+    /// The sound pack picked on the welcome's sounds step (checked after Done).
+    welcome_pack: [64]u8 = undefined,
+    welcome_pack_len: usize = 0,
+    screenshots: bool = true,
+};
+
+pub const Options = struct {
+    /// Capture windows and write PNGs (and the animal × vibe sheets); off = checks only.
+    screenshots: bool = true,
 };
 var st: State = .{};
 
@@ -60,13 +72,14 @@ fn snapLive(tb: *Typebud, name: []const u8) void {
     const pet = pet_view.currentPet(tb, tb.now(), .{ 0, 0 }, 256, 256, 256);
     const rgba = s.renderRgba(pet) catch |e| return fail(tb, "render {s}: {t}", .{ name, e });
     defer tb.gpa.free(rgba);
-    var path_buf: [128]u8 = undefined;
-    const path = std.fmt.bufPrint(&path_buf, out_dir ++ "/pet_{s}.png", .{name}) catch return;
-    snapshot.writeRgbaPng(tb.gpa, tb.io, path, rgba, 256, 256) catch |e| return fail(tb, "write {s}: {t}", .{ path, e });
     var opaque_px: usize = 0;
     var i: usize = 3;
     while (i < rgba.len) : (i += 4) opaque_px += @intFromBool(rgba[i] > 200);
     if (opaque_px < 256 * 256 / 20) fail(tb, "{s}: pet nearly empty ({d} px)", .{ name, opaque_px });
+    if (!st.screenshots) return note(tb, "rendered {s} (frame {t})", .{ name, pet.frame });
+    var path_buf: [128]u8 = undefined;
+    const path = std.fmt.bufPrint(&path_buf, out_dir ++ "/pet_{s}.png", .{name}) catch return;
+    snapshot.writeRgbaPng(tb.gpa, tb.io, path, rgba, 256, 256) catch |e| return fail(tb, "write {s}: {t}", .{ path, e });
     note(tb, "wrote {s} (frame {t})", .{ path, pet.frame });
 }
 
@@ -176,6 +189,7 @@ fn sResized(tb: *Typebud) void {
 
 /// Every animal × vibe, idle with accessories, into one sheet; plus each animal's frames.
 fn sMatrix(tb: *Typebud) void {
+    if (!st.screenshots) return;
     const s = snapper(tb);
     const cell: u32 = 256;
     const n: u32 = @intCast(tb.catalog.count);
@@ -231,7 +245,15 @@ fn sSettingsSection(tb: *Typebud) void {
 }
 
 fn sSettingsShot(tb: *Typebud) void {
-    const w = tb.settingsWindow() orelse return;
+    const w = tb.settingsWindow() orelse return fail(tb, "settings window closed early", .{});
+    defer {
+        st.section += 1;
+        if (st.section == settings_view.Section.labels.len) {
+            st.section = 0;
+            st.look += 1;
+        }
+    }
+    if (!st.screenshots) return;
     const name = settings_view.Section.labels[st.section];
     var pb: [128]u8 = undefined;
     const path = std.fmt.bufPrint(&pb, out_dir ++ "/settings_{s}_{d}_{s}.png", .{ looks[st.look].name, st.section + 1, name }) catch return;
@@ -245,11 +267,6 @@ fn sSettingsShot(tb: *Typebud) void {
     defer tb.gpa.free(img.pixels);
     snapshot.writeRgbaPng(tb.gpa, tb.io, path, img.pixels, img.width, img.height) catch |e| return fail(tb, "{s}: {t}", .{ path, e });
     note(tb, "wrote {s} ({d}x{d})", .{ path, img.width, img.height });
-    st.section += 1;
-    if (st.section == settings_view.Section.labels.len) {
-        st.section = 0;
-        st.look += 1;
-    }
 }
 
 // ---- the first-run welcome -------------------------------------------------------------
@@ -288,7 +305,17 @@ fn sWelcomeStep(tb: *Typebud) void {
             s.head = heads[st.welcome_look];
             if (st.welcome_look == 2) s.held = .coffee;
         },
-        .sounds => s.sound = st.welcome_look != 1,
+        .sounds => {
+            s.sound = st.welcome_look != 1;
+            // Pick a pack other than the default, as the popup would.
+            const packs = tb.library.packs.items;
+            if (packs.len > 1) {
+                const id = packs[(st.welcome_look + 1) % packs.len].id;
+                s.pack.set(id);
+                st.welcome_pack_len = @min(id.len, st.welcome_pack.len);
+                @memcpy(st.welcome_pack[0..st.welcome_pack_len], id[0..st.welcome_pack_len]);
+            }
+        },
         else => {},
     }
     tb.settingsChanged();
@@ -308,8 +335,19 @@ fn sWelcomeShot(tb: *Typebud) void {
     if (step == .typing) {
         if (onboarding.keysSeen() == 0) fail(tb, "welcome: the preview pet saw no keys", .{});
         if (onboarding.typedText().len == 0) fail(tb, "welcome: the try-it field stayed empty", .{});
-        note(tb, "welcome try-it: {d} keys, preview pet {t}", .{ onboarding.keysSeen(), onboarding.previewMode() });
+        note(tb, "welcome try-it: {d} keys, {d} key sounds ({s}), preview pet {t}", .{ onboarding.keysSeen(), onboarding.keySoundsPlayed(), tb.settings.pack.slice(), onboarding.previewMode() });
+        if (tb.settings.sound and onboarding.keySoundsPlayed() == 0) fail(tb, "welcome: typing in the try-it field played no key sounds", .{});
+        if (!tb.settings.sound and onboarding.keySoundsPlayed() != 0) fail(tb, "welcome: key sounds played with sounds off", .{});
     }
+    defer {
+        st.welcome_step += 1;
+        if (st.welcome_step == onboarding.Step.count) {
+            st.welcome_step = 0;
+            st.welcome_look += 1;
+        }
+    }
+    if (onboarding.currentStep() != step) fail(tb, "welcome: on step {t}, expected {t}", .{ onboarding.currentStep(), step });
+    if (!st.screenshots) return;
     var pb: [128]u8 = undefined;
     const path = std.fmt.bufPrint(&pb, out_dir ++ "/onboarding_{s}_{d}_{s}.png", .{ looks[st.welcome_look].name, st.welcome_step + 1, onboarding.Step.slugs[st.welcome_step] }) catch return;
     if (capture.captureWindow(tb.gpa, tb.io, w)) |img| {
@@ -317,11 +355,6 @@ fn sWelcomeShot(tb: *Typebud) void {
         snapshot.writeRgbaPng(tb.gpa, tb.io, path, img.pixels, img.width, img.height) catch |e| fail(tb, "{s}: {t}", .{ path, e });
         note(tb, "wrote {s} ({d}x{d})", .{ path, img.width, img.height });
     } else |e| note(tb, "welcome capture unavailable here: {t}", .{e});
-    st.welcome_step += 1;
-    if (st.welcome_step == onboarding.Step.count) {
-        st.welcome_step = 0;
-        st.welcome_look += 1;
-    }
 }
 
 fn sWelcomeFinish(tb: *Typebud) void {
@@ -329,6 +362,15 @@ fn sWelcomeFinish(tb: *Typebud) void {
     if (onboarding.window(tb) != null) fail(tb, "welcome window still open after Done", .{});
     if (!tb.settings.onboarding_done or tb.settings.onboarding_version != onboarding.version) fail(tb, "welcome: not remembered as done", .{});
     if (onboarding.shouldShow(&tb.settings)) fail(tb, "welcome: would show again", .{});
+    // The pack picked in the welcome is what gets saved.
+    const want = st.welcome_pack[0..st.welcome_pack_len];
+    if (want.len > 0) {
+        if (!std.mem.eql(u8, tb.settings.pack.slice(), want)) fail(tb, "welcome: sound pack {s}, picked {s}", .{ tb.settings.pack.slice(), want });
+        const json = @import("settings.zig").toJson(tb.gpa, &tb.settings) catch |e| return fail(tb, "settings json: {t}", .{e});
+        defer tb.gpa.free(json);
+        if (std.mem.indexOf(u8, json, want) == null) fail(tb, "welcome: picked pack {s} missing from the saved settings", .{want});
+        note(tb, "welcome: sound pack {s} kept after Done", .{want});
+    }
     if (!tb.isShown()) fail(tb, "welcome: the pet did not come back", .{});
 }
 
@@ -338,7 +380,7 @@ fn sWelcomeHop(tb: *Typebud) void {
 }
 
 fn sDesktop(tb: *Typebud) void {
-    if (builtin.os.tag != .linux) return;
+    if (builtin.os.tag != .linux or !st.screenshots) return;
     const res = std.process.run(tb.gpa, tb.io, .{ .argv = &.{ "import", "-window", "root", out_dir ++ "/desktop.png" } }) catch return;
     tb.gpa.free(res.stdout);
     tb.gpa.free(res.stderr);
@@ -367,33 +409,34 @@ fn watchdog(ctx: *anyopaque) void {
     done(tb);
 }
 
-const section_steps = blk: {
-    var list: [settings_view.Section.labels.len * looks.len * 2]script.Step = undefined;
-    for (0..settings_view.Section.labels.len * looks.len) |i| {
+/// Settings sections × `n_looks`: switch, then (maybe) capture.
+fn sectionSteps(comptime n_looks: usize, comptime shot_ms: u32) [settings_view.Section.labels.len * n_looks * 2]script.Step {
+    var list: [settings_view.Section.labels.len * n_looks * 2]script.Step = undefined;
+    for (0..settings_view.Section.labels.len * n_looks) |i| {
         list[i * 2] = .{ .wait_ms = 100, .run = sSettingsSection };
-        list[i * 2 + 1] = .{ .wait_ms = 500, .run = sSettingsShot };
+        list[i * 2 + 1] = .{ .wait_ms = shot_ms, .run = sSettingsShot };
     }
-    break :blk list;
-};
+    return list;
+}
 
-const welcome_steps = blk: {
-    const per_look = onboarding.Step.count * 2 + 1;
-    var list: [looks.len * per_look]script.Step = undefined;
+/// The welcome's steps × `n_looks`; the try-it step types fast enough to get excited.
+fn welcomeSteps(comptime n_looks: usize, comptime shot_ms: u32) [n_looks * (onboarding.Step.count * 2 + 1)]script.Step {
+    var list: [n_looks * (onboarding.Step.count * 2 + 1)]script.Step = undefined;
     var n: usize = 0;
-    for (0..looks.len) |_| for (0..onboarding.Step.count) |i| {
+    for (0..n_looks) |_| for (0..onboarding.Step.count) |i| {
         list[n] = .{ .wait_ms = 120, .run = sWelcomeStep };
         n += 1;
         if (i == @intFromEnum(onboarding.Step.typing)) {
             list[n] = .{ .wait_ms = 350, .run = sWelcomeType };
             n += 1;
             list[n] = .{ .wait_ms = 3500, .run = sWelcomeShot };
-        } else list[n] = .{ .wait_ms = 650, .run = sWelcomeShot };
+        } else list[n] = .{ .wait_ms = shot_ms, .run = sWelcomeShot };
         n += 1;
     };
-    break :blk list[0..n].*;
-};
+    return list;
+}
 
-const steps = [_]script.Step{
+const pet_steps = [_]script.Step{
     .{ .run = sWatchdogArm },
     .{ .run = sLaunch },
     .{ .wait_ms = 1200, .run = sIdle },
@@ -408,16 +451,26 @@ const steps = [_]script.Step{
     .{ .wait_ms = 800, .run = sHold },
     .{ .wait_ms = 400, .run = sHoldShot },
     .{ .wait_ms = 800, .run = sResized },
-    .{ .wait_ms = 300, .run = sDesktop },
-    .{ .run = sMatrix },
-} ++ section_steps ++ [_]script.Step{.{ .wait_ms = 300, .run = sWelcomeOpen }} ++ welcome_steps ++ [_]script.Step{
+};
+
+const welcome_end = [_]script.Step{
     .{ .wait_ms = 300, .run = sWelcomeFinish },
     .{ .wait_ms = 330, .run = sWelcomeHop },
 };
 
-pub fn start(tb: *Typebud, code: *u8) void {
-    st = .{ .code = code };
+/// Everything, every look, with screenshots.
+const steps = pet_steps ++ [_]script.Step{
+    .{ .wait_ms = 300, .run = sDesktop },
+    .{ .run = sMatrix },
+} ++ sectionSteps(looks.len, 500) ++ [_]script.Step{.{ .wait_ms = 300, .run = sWelcomeOpen }} ++ welcomeSteps(looks.len, 650) ++ welcome_end;
+
+/// `--no-screenshots`: the same checks in the first look, without the capture waits.
+const quick_steps = pet_steps ++ sectionSteps(1, 150) ++ [_]script.Step{.{ .wait_ms = 300, .run = sWelcomeOpen }} ++ welcomeSteps(1, 250) ++ welcome_end;
+
+pub fn start(tb: *Typebud, code: *u8, opts: Options) void {
+    st = .{ .code = code, .screenshots = opts.screenshots };
     std.Io.Dir.cwd().createDirPath(tb.io, out_dir) catch {};
-    st.runner = .{ .tb = tb, .steps = &steps, .done = done };
+    note(tb, "screenshots: {s}", .{if (opts.screenshots) "on" else "off (--no-screenshots)"});
+    st.runner = .{ .tb = tb, .steps = if (opts.screenshots) &steps else &quick_steps, .done = done };
     st.runner.start();
 }

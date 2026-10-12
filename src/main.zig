@@ -4,6 +4,8 @@
 //!   typebud              run (tray / menu bar item; double-click the pet for settings)
 //!   typebud --settings   also open the settings window
 //!   typebud --smoke      scripted CI run: screenshots to zig-out/smoke/ (TYPEBUD_SMOKE=1)
+//!   typebud --smoke --no-screenshots   the same checks, faster: one look, no captures
+//!                        (TYPEBUD_SMOKE_SCREENSHOTS=0)
 //!   typebud --demo       ~1 minute feature tour for the demo video (TYPEBUD_DEMO=1)
 //!   typebud --import-pack <folder>   import a Mechvibes / MechvibesDX / Thock pack
 
@@ -27,6 +29,7 @@ const Launch = struct {
     env: *const std.process.Environ.Map,
     mode: Mode,
     open_settings: bool,
+    screenshots: bool = true,
     tb: ?*app_mod.Typebud = null,
     updates: ?*updates_mod.Updates = null,
     app: ?*zpui.App = null,
@@ -94,7 +97,7 @@ fn onLaunch(l: *Launch, app: *zpui.App) void {
     startUpdates(l, app);
     switch (l.mode) {
         .normal => tb.launch(),
-        .smoke => smoke.start(tb, &l.exit_code),
+        .smoke => smoke.start(tb, &l.exit_code, .{ .screenshots = l.screenshots }),
         .demo => demo.start(tb, &l.exit_code),
     }
 }
@@ -115,6 +118,10 @@ pub fn main(init: std.process.Init) !void {
     const env = init.environ_map;
     var mode: Mode = .normal;
     var open_settings = false;
+    var screenshots = true;
+    if (env.get("TYPEBUD_SMOKE_SCREENSHOTS")) |v| if (std.mem.eql(u8, v, "0")) {
+        screenshots = false;
+    };
     if (env.get("TYPEBUD_SMOKE")) |v| if (v.len > 0 and !std.mem.eql(u8, v, "0")) {
         mode = .smoke;
     };
@@ -125,7 +132,7 @@ pub fn main(init: std.process.Init) !void {
     defer args.deinit();
     _ = args.skip();
     while (args.next()) |a| {
-        if (std.mem.eql(u8, a, "--smoke")) mode = .smoke else if (std.mem.eql(u8, a, "--demo")) mode = .demo else if (std.mem.eql(u8, a, "--settings")) open_settings = true else if (std.mem.eql(u8, a, "--version")) {
+        if (std.mem.eql(u8, a, "--smoke")) mode = .smoke else if (std.mem.eql(u8, a, "--demo")) mode = .demo else if (std.mem.eql(u8, a, "--settings")) open_settings = true else if (std.mem.eql(u8, a, "--no-screenshots")) screenshots = false else if (std.mem.eql(u8, a, "--version")) {
             std.debug.print("typebud {s}\n", .{@import("build_options").version});
             return;
         } else if (std.mem.eql(u8, a, "--write-icons")) {
@@ -148,7 +155,7 @@ pub fn main(init: std.process.Init) !void {
             std.debug.print("imported {s} into {s}\n", .{ id, dest });
             return;
         } else if (std.mem.startsWith(u8, a, "--typebud-updated-from=")) {} else {
-            std.debug.print("usage: typebud [--settings] [--smoke] [--demo] [--version]\n", .{});
+            std.debug.print("usage: typebud [--settings] [--smoke [--no-screenshots]] [--demo] [--version]\n", .{});
             std.process.exit(2);
         }
     }
@@ -158,7 +165,7 @@ pub fn main(init: std.process.Init) !void {
     };
     const app = try zpui.App.init(gpa, plat);
     app.quit_when_last_window_closes = false;
-    var l: Launch = .{ .gpa = gpa, .io = init.io, .env = env, .mode = mode, .open_settings = open_settings };
+    var l: Launch = .{ .gpa = gpa, .io = init.io, .env = env, .mode = mode, .open_settings = open_settings, .screenshots = screenshots };
     app.run(&l, onLaunch);
     if (l.tb) |tb| tb.destroy();
     if (l.updates) |up| {

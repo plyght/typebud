@@ -1,15 +1,44 @@
 name: App
 
-# Builds typebud, runs its unit tests and the scripted smoke test (`typebud --smoke`:
-# pet + settings windows, synthetic typing, idle-frame check, screenshots of the pet
-# states, every animal × vibe, each animal's frames and every settings section), packages
-# it, and uploads the screenshots and packages as artifacts.
+# Builds typebud and runs its unit tests and the scripted smoke test on Linux, macOS and
+# Windows.
+#
+# On push: build + `zig build test` + `typebud --smoke --no-screenshots` (launch, synthetic
+# typing, excited / idle / asleep states, the no-frames-while-idle check, every settings
+# section and the first-run welcome, in one look; nothing captured, ~25 s). Only the
+# smoke log and report are uploaded.
+#
+# Run it by hand (Actions > App > Run workflow, or
+#   gh workflow run app.yml -f screenshots=true [-f packages=true])
+# for more:
+#   screenshots  (boolean, default false) full `typebud --smoke`: screenshots of the pet
+#                states, every animal × vibe, each animal's frames, every settings section
+#                and every welcome step in three looks, uploaded as typebud-<os>
+#                artifacts (zig-out/smoke/*.png); adds a macOS 15 leg (pre-Liquid Glass look).
+#   packages     (boolean, default false) also package (tarball, Typebud.app universal zip,
+#                Windows folder) and upload the packages.
+# Releases are built by release.yml (no smoke, no screenshots).
+#
+# macOS builds on the Xcode 27 image (macOS 27, arm64): the binary links against the
+# macOS 27 SDK (and declares sdk >= 27.0 either way, packaging/macos_sdk.zig), which is
+# what gives it the macOS 27 look; scripts/check-macos-sdk.sh checks that.
 #
 # zpui is checked out at the commit pinned in build.zig (`zpui_commit`) by
 # scripts/fetch-zpui.sh into ./zpui (a path dependency in build.zig.zon).
 
 on:
   workflow_dispatch:
+    inputs:
+      screenshots:
+        description: Full smoke run with screenshots (uploaded as artifacts)
+        type: boolean
+        required: false
+        default: false
+      packages:
+        description: Also build and upload the packages
+        type: boolean
+        required: false
+        default: false
   push:
     branches: [main]
     paths:
@@ -18,6 +47,7 @@ on:
       - build.zig.zon
       - packaging/**
       - scripts/check-macos-sdk.sh
+      - scripts/fetch-zpui.sh
       - .github/workflows/app.yml
       - art/**
       - sounds/**
@@ -30,6 +60,10 @@ concurrency:
 
 env:
   ZIG_VERSION: 0.17.0
+  # Full smoke (screenshots) only when asked for; otherwise checks only.
+  SCREENSHOTS: ${{ github.event_name == 'workflow_dispatch' && inputs.screenshots && 'true' || 'false' }}
+  SMOKE_ARGS: ${{ github.event_name == 'workflow_dispatch' && inputs.screenshots && '--smoke' || '--smoke --no-screenshots' }}
+  PACKAGES: ${{ github.event_name == 'workflow_dispatch' && inputs.packages && 'true' || 'false' }}
   LINUX_DEPS: >-
     libvulkan-dev mesa-vulkan-drivers glslc
     libwayland-dev wayland-protocols libxkbcommon-dev libxkbcommon-x11-dev
@@ -46,10 +80,11 @@ jobs:
       - uses: mlugg/setup-zig@v2
         with:
           version: ${{ env.ZIG_VERSION }}
-      - name: Install dependencies (+ Xvfb, ImageMagick)
+      - name: Install dependencies (+ Xvfb; ImageMagick for screenshots)
         run: |
+          extra=""; [[ "$SCREENSHOTS" == "true" ]] && extra=imagemagick
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends $LINUX_DEPS xvfb xauth imagemagick
+          sudo apt-get install -y --no-install-recommends $LINUX_DEPS xvfb xauth $extra
           echo "VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json" >> "$GITHUB_ENV"
       - name: Unit tests
         run: zig build test --summary all
@@ -59,17 +94,14 @@ jobs:
         timeout-minutes: 5
         run: |
           set +e
-          xvfb-run -a -s "-screen 0 1440x900x24 -nolisten tcp" ./zig-out/bin/typebud --smoke 2>&1 | tee smoke.log
+          xvfb-run -a -s "-screen 0 1440x900x24 -nolisten tcp" ./zig-out/bin/typebud $SMOKE_ARGS 2>&1 | tee smoke.log
           code=${PIPESTATUS[0]}
           set -e
           cat zig-out/smoke/report.txt || true
           exit $code
       - name: Package (tarball + AppDir)
+        if: env.PACKAGES == 'true'
         run: zig build package -Doptimize=ReleaseFast --prefix out/pkg --summary all
-      - name: Cross-compile checks (macOS object, Windows compile)
-        run: |
-          zig build check -Dtarget=aarch64-macos --summary all
-          zig build check -Dtarget=x86_64-windows-gnu --summary all || echo "::warning::Windows link needs zpui's Windows backend (vulkan-1); compile-only for now"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -84,10 +116,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15, macos-26]
+        # xcode-27: macOS 27 + Xcode 27 (arm64, public preview). With screenshots, also
+        # macos-15 for the pre-Liquid Glass look (Xcode 26 there).
+        os: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.screenshots && '["xcode-27", "macos-15"]' || '["xcode-27"]') }}
     runs-on: ${{ matrix.os }}
-    # macos-26 runners may not be available to every account yet.
-    continue-on-error: ${{ matrix.os == 'macos-26' }}
+    # Only the extra screenshot leg may fail without failing the run.
+    continue-on-error: ${{ matrix.os != 'xcode-27' }}
     steps:
       - uses: actions/checkout@v4
       - name: zpui (pinned)
@@ -95,6 +129,13 @@ jobs:
       - uses: mlugg/setup-zig@v2
         with:
           version: ${{ env.ZIG_VERSION }}
+      - name: Newest Xcode
+        run: |
+          xcode=$(ls -d /Applications/Xcode_27*.app /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1 || true)
+          if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
+          sw_vers
+          xcode-select -p
+          xcrun --sdk macosx --show-sdk-version
       - name: Unit tests
         run: zig build test --summary all
       - name: Build
@@ -107,12 +148,13 @@ jobs:
           ZPUI_ACCESSORY_APP: "1"
         run: |
           set +e
-          ./zig-out/bin/typebud --smoke 2>&1 | tee smoke.log
+          ./zig-out/bin/typebud $SMOKE_ARGS 2>&1 | tee smoke.log
           code=${PIPESTATUS[0]}
           set -e
           cat zig-out/smoke/report.txt || true
           exit $code
       - name: Package Typebud.app (universal)
+        if: env.PACKAGES == 'true'
         run: |
           zig build package -Doptimize=ReleaseFast -Duniversal=true --prefix out/pkg --summary all
           plutil -lint out/pkg/Typebud.app/Contents/Info.plist
@@ -149,8 +191,9 @@ jobs:
       - name: Smoke test
         shell: bash
         timeout-minutes: 5
-        run: ./zig-out/bin/typebud.exe --smoke 2>&1 | tee smoke.log
+        run: ./zig-out/bin/typebud.exe $SMOKE_ARGS 2>&1 | tee smoke.log
       - name: Package
+        if: env.PACKAGES == 'true'
         run: zig build package -Doptimize=ReleaseFast --prefix out/pkg --summary all
       - uses: actions/upload-artifact@v4
         if: always()
