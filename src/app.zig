@@ -546,19 +546,24 @@ pub const Typebud = struct {
                 // key_x 0.5 is the backends' "unknown"; the macOS counter alternates itself.
                 const kx: ?f32 = if (e.key_x == 0.5 and e.key == .other) null else e.key_x;
                 self.state.onKey(.{ .key = @enumFromInt(@intFromEnum(e.key)), .key_x = kx, .t = now_ns });
-                const pool = sound.poolForClass(e.key);
-                if (!self.soundMuted()) {
-                    self.player.play(.down, pool);
-                    if (self.synth_key_up and self.settings.key_up) self.scheduleKeyUp(pool);
-                }
+                // The welcome's try-it field plays its own key sounds (exactly once per key).
+                if (!self.soundMuted() and !onboarding.ownsKeySounds(self)) self.playKeySound(sound.poolForClass(e.key));
                 self.rearm();
                 if (self.isShown()) self.redrawPet();
             },
             .key_up => {
-                if (!self.synth_key_up and self.settings.key_up and !self.soundMuted()) self.player.play(.up, sound.poolForClass(e.key));
+                // The welcome's own keys get a synthesized key-up (`playKeySound`).
+                if (!self.synth_key_up and self.settings.key_up and !self.soundMuted() and !onboarding.ownsKeySounds(self)) self.player.play(.up, sound.poolForClass(e.key));
             },
             else => {},
         }
+    }
+
+    /// A key-down sound with the selected pack and volume, plus its key-up where the pack
+    /// has one (synthesized ~80 ms later unless real key-ups arrive from the monitor).
+    pub fn playKeySound(self: *Typebud, pool: sound.Pool) void {
+        self.player.play(.down, pool);
+        if (self.settings.key_up and (self.synth_key_up or onboarding.ownsKeySounds(self))) self.scheduleKeyUp(pool);
     }
 
     fn scheduleKeyUp(self: *Typebud, pool: sound.Pool) void {

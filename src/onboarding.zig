@@ -4,11 +4,15 @@
 //! whatever is set so far. Shown once (`Settings.onboarding_done`), again from the tray
 //! menu or Settings → System.
 //!
-//! Performance: like the pet, nothing runs while nothing changes. The preview pet has its
-//! own `PetState` (the real state machine) with one timer for its next deadline; frames
-//! are requested only while something moves (a step slide, a squash, a hop, the excited
-//! bob, a sparkle burst). Layer images are cached per size; nothing is allocated per
-//! frame beyond zpui's frame arena.
+//! The preview pet holds still: one calm pose per step (`pose`), no hops, bobs or
+//! squashes. On the try-it step (and while the sound sample plays) it follows the real
+//! state machine, switching frames as keys arrive, still without moving. Typing there
+//! plays the chosen pack's key sounds (the global monitor stays quiet for those keys).
+//!
+//! Performance: nothing runs while nothing changes. The preview pet's `PetState` arms
+//! one timer only while it is reacting to keys; frames are requested only for a step
+//! slide or the excited sparkle burst. Layer images are cached per size; nothing is
+//! allocated per frame beyond zpui's frame arena.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -19,6 +23,7 @@ const render_mod = @import("render.zig");
 const legends = @import("legends.zig");
 const settings_mod = @import("settings.zig");
 const pet_state = @import("pet_state.zig");
+const sound = @import("sound.zig");
 const app_mod = @import("app.zig");
 
 const Window = zpui.Window;
@@ -162,8 +167,8 @@ const State = struct {
     prev_mode: pet_state.Mode = .idle,
     burst_at: u64 = 0,
     hover_card: ?u8 = null,
-    pick_at: u64 = 0,
-    picked: u8 = 0,
+    /// Key sounds played for the try-it field since the last `scriptType` (smoke checks).
+    key_sounds: u32 = 0,
     text: [text_cap]u8 = undefined,
     text_len: usize = 0,
     last_keydown: u64 = 0,
@@ -202,6 +207,24 @@ pub fn clearText() void {
 pub fn previewMode() pet_state.Mode {
     return ob.pet.mode;
 }
+pub fn keySoundsPlayed() u32 {
+    return ob.key_sounds;
+}
+
+/// The welcome window has focus on the try-it step: it plays its own key sounds, so the
+/// global monitor (which also sees these keys on Linux and Windows) must not.
+pub fn ownsKeySounds(tb: *Typebud) bool {
+    if (!ob.active or ob.step != .typing) return false;
+    const w = window(tb) orelse return false;
+    return w.isWindowActive();
+}
+
+/// The chosen pack's sound for a key typed into the try-it field (once per key).
+fn keySound(tb: *Typebud, key: []const u8) void {
+    if (tb.soundMuted()) return;
+    tb.playKeySound(sound.poolForClass(classify(key).key));
+    ob.key_sounds += 1;
+}
 
 pub fn window(tb: *Typebud) ?*Window {
     const id = ob.window orelse return null;
@@ -231,9 +254,6 @@ pub fn open(tb: *Typebud, why: Reason) void {
     const now = tb.now();
     ob = .{ .active = true };
     ob.pet = pet_state.PetState.init(now, previewConfig(tb));
-    // Say hi: a hop as the window appears, then a peek.
-    ob.pet.hop(now + 150 * ms);
-    ob.pet.peek_at = now + 1100 * ms;
     for (tb.catalog.list(), 0..) |a, i| {
         const n = @min(a.name.len, ob.names[i].len);
         @memcpy(ob.names[i][0..n], a.name[0..n]);
@@ -311,11 +331,6 @@ pub fn goTo(tb: *Typebud, s: Step) void {
     ob.dir = if (@intFromEnum(s) > @intFromEnum(ob.step)) 1 else -1;
     ob.step = s;
     ob.hover_card = null;
-    const now = tb.now();
-    // A little hop to greet each step (the done step gets a bigger cheer: sparkles).
-    if (s == .done) ob.burst_at = now + 120 * ms;
-    ob.pet.hop(now + 80 * ms);
-    rearm(tb);
     refresh(tb);
 }
 
@@ -358,7 +373,10 @@ fn deleteBack() void {
     while (ob.text_len > 0 and (ob.text[ob.text_len] & 0xC0) == 0x80) ob.text_len -= 1;
 }
 
+/// Arms the preview pet's timer only while it reacts to keys (typing, excited): an idle
+/// preview shows a fixed pose, so its peeks and sips need no wakeups.
 fn rearm(tb: *Typebud) void {
+    if (!reacting()) return;
     const now = tb.now();
     const d = ob.pet.nextDeadline(now) orelse return;
     if (ob.armed_at) |a| if (a <= d and a > now) return;
@@ -388,6 +406,7 @@ pub fn scriptType(tb: *Typebud, text: []const u8, gap_ms: u32) void {
     ob.script_i = 0;
     ob.script_gap = @as(u64, gap_ms) * ms;
     ob.script_start = tb.now();
+    ob.key_sounds = 0;
     scriptTick(tb);
 }
 
@@ -404,7 +423,9 @@ fn scriptTick(tb: *Typebud) void {
         const c = ob.script_text[ob.script_i];
         ob.script_i += 1;
         var kb: [1]u8 = .{c};
-        feedKey(tb, if (c == ' ') "space" else kb[0..1]);
+        const key = if (c == ' ') "space" else kb[0..1];
+        feedKey(tb, key);
+        keySound(tb, key);
         insertText(kb[0..1]);
     }
     refresh(tb);
@@ -420,6 +441,31 @@ fn onScriptTimer(ctx: *anyopaque) void {
     scriptTick(c.tb);
 }
 
+/// The preview pet is answering keys (typing or excited, from the try-it field or the
+/// sound sample): it follows the state machine instead of the step's pose.
+fn reacting() bool {
+    return switch (ob.pet.mode) {
+        .typing, .excited, .waking => true,
+        .idle, .sleeping => false,
+    };
+}
+
+/// The step's still pose: a curious peek to say hi, settled on the choosing steps (with
+/// the coffee in paw when it holds one), a big happy face when all is set.
+pub fn stepPose(step: Step, holding: bool) art.Frame {
+    return switch (step) {
+        .hello => .peek,
+        .done => .excited,
+        else => if (holding) .hold else .idle,
+    };
+}
+
+fn pose(tb: *Typebud, now: u64) art.Frame {
+    if (reacting()) return ob.pet.frame(now);
+    const f = stepPose(ob.step, ob.pet.config.holding);
+    return if (tb.catalog.animals[tb.animal].hasFrame(f)) f else .idle;
+}
+
 // ---- view -------------------------------------------------------------------------------
 
 const star_svg =
@@ -427,7 +473,6 @@ const star_svg =
 ;
 const star_logical: f32 = 40;
 const burst_len: u64 = 900 * ms;
-const pick_len: u64 = 380 * ms;
 
 const content_w: f32 = window_size.width - 2 * 28;
 const card_w: f32 = 114;
@@ -603,7 +648,7 @@ pub const OnboardingView = struct {
     }
 
     fn popIn(el: zpui.StatefulDiv, t: f32) zpui.StatefulDiv {
-        return el.opacity(t).mt(px(8 * (1 - t)));
+        return el.opacity(t);
     }
 
     fn cards(self: *OnboardingView, w: *Window, look: prefs.Look, cx: *Context(OnboardingView), tb: *Typebud) zpui.StatefulDiv {
@@ -699,8 +744,7 @@ pub const OnboardingView = struct {
         self.stage_cache.retainOnly(tb.animal, tb.settings.vibe, rp);
         const kb = art.Affine.keyboard(tb.catalog.animals[tb.animal].anchors.keyboard);
         if (tb.font_id) |fid| if (!self.layout.matches(size, scale, kb)) legends.layout(&self.layout, tb.app.textSystem(), fid, &tb.keys, size, scale, kb);
-        const frame = ob.pet.frame(now);
-        const m = ob.pet.motion(now);
+        const frame = pose(tb, now);
         const head = tb.catalog.animals[tb.animal].anchors.head;
         var outfit = tb.outfit(frame);
         if (ob.step == .hello or ob.step == .done) outfit.sparkles = true;
@@ -709,7 +753,6 @@ pub const OnboardingView = struct {
             .vibe = tb.settings.vibe,
             .frame = frame,
             .outfit = outfit,
-            .motion = .{ .dy = m.dy, .squash = m.squash, .pivot = .{ head.cx, 236 } },
             .origin = .{ ox, oy },
             .size = size,
             .raster_px = rp,
@@ -734,7 +777,7 @@ pub const OnboardingView = struct {
                 self.paintStar(w, hx + @cos(ang) * r * 1.25, hy + @sin(ang) * r, sz, 1 - t * t);
             }
         } else if (ob.burst_at != 0 and now < ob.burst_at) bursting = true;
-        if (bursting or ob.pet.animating(now)) w.requestAnimationFrame();
+        if (bursting) w.requestAnimationFrame();
     }
 
     const CardCtx = struct { view: *OnboardingView, index: u8 };
@@ -743,7 +786,6 @@ pub const OnboardingView = struct {
         const tb = app_mod.instance;
         const self = c.view;
         const i: usize = c.index;
-        const now = tb.now();
         const scale = w.scaleFactor();
         const rp: u32 = @intFromFloat(@round(b.size.width * scale));
         self.card_cache.atlas = w.sprite_atlas;
@@ -759,20 +801,11 @@ pub const OnboardingView = struct {
         outfit.desk = .{};
         outfit.sparkles = false;
         if (!tb.catalog.animals[i].hasHeadItem(outfit.head)) outfit.head = .none;
-        var dy: f32 = 0;
-        var animating = false;
-        if (on and ob.pick_at != 0 and now - ob.pick_at < pick_len and tb.settings.animations) {
-            const t = @as(f32, @floatFromInt(now - ob.pick_at)) / @as(f32, @floatFromInt(pick_len));
-            dy = pet_state.hopOffset(t) * 0.8;
-            animating = true;
-        }
-        const head = tb.catalog.animals[i].anchors.head;
         const pet: render_mod.Pet = .{
             .animal = i,
             .vibe = tb.settings.vibe,
             .frame = frame,
             .outfit = outfit,
-            .motion = .{ .dy = dy, .pivot = .{ head.cx, 236 } },
             .origin = .{ b.origin.x, b.origin.y },
             .size = b.size.width,
             .raster_px = rp,
@@ -780,7 +813,6 @@ pub const OnboardingView = struct {
         };
         var wp: render_mod.WindowPainter = .{ .window = w };
         render_mod.paint(pet, .{ .catalog = tb.catalog, .cache = &self.card_cache, .legend_layout = null, .legend_colors = render_mod.legendColors(tb.catalog) }, wp.painter());
-        if (animating) w.requestAnimationFrame();
     }
 
     // ---- input ------------------------------------------------------------------------------
@@ -789,7 +821,11 @@ pub const OnboardingView = struct {
         if (ob.step != .typing) return;
         const tb = app_mod.instance;
         // Keys that arrive only as text (IME, some layouts) still make the pet tap.
-        if (tb.now() -| ob.last_keydown > 40 * ms) feedKey(tb, if (text.len == 1) text else "x");
+        if (tb.now() -| ob.last_keydown > 40 * ms) {
+            const key = if (text.len == 1) text else "x";
+            feedKey(tb, key);
+            keySound(tb, key);
+        }
         insertText(text);
         refresh(tb);
     }
@@ -809,6 +845,7 @@ pub const OnboardingView = struct {
         if (ob.step == .typing) {
             if (ev.is_held and !eq(u8, ks.key, "backspace")) return;
             feedKey(tb, ks.key);
+            keySound(tb, ks.key);
             if (eq(u8, ks.key, "backspace")) deleteBack();
             if (eq(u8, ks.key, "enter") and m.alt) goTo(tb, ob.step.next());
             cx.notify();
@@ -867,8 +904,6 @@ pub const OnboardingView = struct {
         const tb = app_mod.instance;
         chooseVibe(&tb.settings, @enumFromInt(@min(i, 2)));
         tb.settingsChanged();
-        ob.pet.hop(tb.now());
-        rearm(tb);
         cx.notify();
     }
 
@@ -918,8 +953,6 @@ fn accessoryChanged(tb: *Typebud) void {
     // Holding coffee changes the idle pose; the preview follows the real config.
     tb.settingsChanged();
     ob.pet.setConfig(tb.now(), previewConfig(tb));
-    ob.pet.hop(tb.now());
-    rearm(tb);
 }
 
 fn next(tb: *Typebud) void {
@@ -931,8 +964,6 @@ fn pickAnimal(tb: *Typebud, i: u8) void {
     const a = &tb.catalog.animals[i];
     chooseAnimal(&tb.settings, a.name, a.hasHeadItem(tb.settings.head));
     tb.settingsChanged();
-    ob.pick_at = tb.now();
-    ob.picked = i;
     refresh(tb);
 }
 
@@ -1199,4 +1230,12 @@ test "welcome: key classification for the preview paws" {
     try testing.expectEqual(pet_state.KeyClass.digit, classify("7").key);
     try testing.expectEqual(pet_state.KeyClass.backspace, classify("backspace").key);
     try testing.expectEqual(pet_state.KeyClass.other, classify("f5").key);
+}
+
+test "welcome: the preview pet holds a still pose per step" {
+    try testing.expectEqual(art.Frame.peek, stepPose(.hello, false));
+    try testing.expectEqual(art.Frame.idle, stepPose(.vibe, false));
+    try testing.expectEqual(art.Frame.hold, stepPose(.vibe, true));
+    try testing.expectEqual(art.Frame.excited, stepPose(.done, false));
+    for (std.meta.tags(Step)) |s| try testing.expect(!stepPose(s, false).isTyping() or s == .done);
 }
