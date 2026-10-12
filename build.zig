@@ -22,7 +22,7 @@ pub const zpui_commit = "cca22983e7e8124bb8e650616e3803f217e52b95";
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const version = b.option([]const u8, "version", "App version (semver, default from build.zig.zon)") orelse "0.1.1";
+    const version = b.option([]const u8, "version", "App version (semver, default from build.zig.zon)") orelse "0.1.2";
     const update_key = updatePublicKey(b);
     const os = target.result.os.tag;
     const host_os = builtin.os.tag;
