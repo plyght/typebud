@@ -175,6 +175,7 @@ const State = struct {
     script_text: []const u8 = "",
     script_i: usize = 0,
     script_gap: u64 = 0,
+    script_start: u64 = 0,
     script_id: u32 = 0,
 };
 var ob: State = .{};
@@ -257,7 +258,7 @@ pub fn open(tb: *Typebud, why: Reason) void {
     const handle = tb.app.openWindow(.{
         .bounds = .{ .origin = origin, .size = window_size },
         // macOS: full-size content under a hidden, transparent title; traffic lights in
-        // our own header band. Windows: the system caption over Mica. Linux: drawn.
+        // our own header band. Windows: the system caption. Linux: drawn.
         .titlebar = switch (builtin.os.tag) {
             .macos => .{ .title = title, .appears_transparent = true, .traffic_light_position = .{ .x = 14, .y = 13 } },
             .windows => .{ .title = title },
@@ -265,7 +266,9 @@ pub fn open(tb: *Typebud, why: Reason) void {
         },
         .app_id = if (mac) app_mod.bundle_id else app_mod.app_id,
         .min_size = window_size,
-        .background = if (builtin.os.tag == .windows) .blurred else .opaque_,
+        // Windows: opaque, not Mica. Under Mica, zpui's Windows backend leaves the native
+        // controls of a step that slid away on screen (and the combo box text unreadable).
+        .background = .opaque_,
         .display_id = if (nd > 0) displays[0].id else null,
     }, OnboardingView, OnboardingView.init, .{}) catch |e| {
         std.log.err("welcome window: {t}", .{e});
@@ -384,6 +387,7 @@ pub fn scriptType(tb: *Typebud, text: []const u8, gap_ms: u32) void {
     ob.script_text = text;
     ob.script_i = 0;
     ob.script_gap = @as(u64, gap_ms) * ms;
+    ob.script_start = tb.now();
     scriptTick(tb);
 }
 
@@ -391,16 +395,23 @@ const ScriptTick = struct {
     var ctx: struct { tb: *Typebud, id: u32 } = undefined;
 };
 
+/// Types every character that is due by now (late timers on a busy CI machine catch up,
+/// so the typing rate stays what was asked).
 fn scriptTick(tb: *Typebud) void {
-    if (!ob.active or ob.script_i >= ob.script_text.len) return;
-    const c = ob.script_text[ob.script_i];
-    ob.script_i += 1;
-    var kb: [1]u8 = .{c};
-    feedKey(tb, if (c == ' ') "space" else kb[0..1]);
-    insertText(kb[0..1]);
+    if (!ob.active) return;
+    const now = tb.now();
+    while (ob.script_i < ob.script_text.len and ob.script_start + ob.script_i * ob.script_gap <= now) {
+        const c = ob.script_text[ob.script_i];
+        ob.script_i += 1;
+        var kb: [1]u8 = .{c};
+        feedKey(tb, if (c == ' ') "space" else kb[0..1]);
+        insertText(kb[0..1]);
+    }
     refresh(tb);
+    if (ob.script_i >= ob.script_text.len) return;
+    const due = ob.script_start + ob.script_i * ob.script_gap;
     ScriptTick.ctx = .{ .tb = tb, .id = ob.script_id };
-    tb.app.platform.dispatcher().dispatchAfter(ob.script_gap, .{ .ctx = &ScriptTick.ctx, .run = onScriptTimer });
+    tb.app.platform.dispatcher().dispatchAfter(@max(due -| now, ms), .{ .ctx = &ScriptTick.ctx, .run = onScriptTimer });
 }
 
 fn onScriptTimer(ctx: *anyopaque) void {
@@ -466,7 +477,7 @@ pub const OnboardingView = struct {
             self.focused_typing = true;
         } else if (step != .typing) self.focused_typing = false;
 
-        const bg: Hsla = if (builtin.os.tag == .windows) zpui.color.transparent_black else look.window_bg;
+        const bg: Hsla = look.window_bg;
         var root = div().id("welcome").relative().size(zpui.relative(1)).flex().flexCol().overflowHidden()
             .bg(bg).fontFamily(family).textSize(px(13)).textColor(look.fg)
             .trackFocus(self.focus)
@@ -1008,7 +1019,7 @@ const Note = struct {
     command: ?[]const u8 = null,
 
     fn render(n: Note, look: prefs.Look) zpui.Div {
-        var col = div().flex().flexCol().itemsCenter().gap(px(5)).maxW(px(450))
+        var col = div().flex().flexCol().itemsCenter().gap(px(5)).maxW(px(504))
             .child(div().textSize(px(11.5)).lineHeight(px(15)).textColor(look.fg_dim).textCenter().child(n.text));
         if (n.command) |c| col = col.child(div().px(px(10)).py(px(4)).rounded(px(6)).bg(look.fg.alpha(0.08)).fontFamily(monoFont()).textSize(px(12)).textColor(look.fg).child(c));
         return col;
@@ -1027,7 +1038,7 @@ fn monoFont() []const u8 {
 /// without /dev/input access: one command). X11 / Windows: nothing.
 fn platformNote(tb: *Typebud) ?Note {
     switch (builtin.os.tag) {
-        .macos => if (!tb.settings.precise_input) return .{ .text = "No permissions needed. For paw-perfect left and right taps, you can turn on Precise Typing Detection in Settings later." },
+        .macos => if (!tb.settings.precise_input) return .{ .text = "No permissions needed. For paw-perfect taps, try Precise Typing Detection in Settings later." },
         .linux => if (tb.input_status == .needs_permission) return .{ .text = "On Wayland I read your keyboard directly, so run this once and then log out and back in:", .command = linux_input_command },
         else => {},
     }
