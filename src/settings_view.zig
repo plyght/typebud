@@ -51,6 +51,7 @@ pub const Section = enum {
 const Toggle = enum(u8) { keyboard, desk_plant, desk_lamp, desk_mug, sparkles, animations, sound, key_up, mute_other_audio, mute_mic, remember_visible, launch_at_login, precise_input, auto_update };
 const Choice = enum(u8) { vibe, head, held, corner, display, sleep, sensitivity, pack, visibility, size_preset };
 const Value = enum(u8) { size, volume };
+const Action = enum(u8) { preview, import, check };
 
 const sleep_choices = [_]u32{ 0, 30, 60, 120, 300, 600 };
 const sleep_labels = [_][]const u8{ "Never", "30 seconds", "1 minute", "2 minutes", "5 minutes", "10 minutes" };
@@ -417,9 +418,9 @@ pub const SettingsView = struct {
         };
         const pack_row = div().flex().flexRow().itemsCenter().gap(px(8))
             .child(zpui.nativePopup("pack", .{ .items = names, .selected = sel, .label = "Sound Pack", .width = px(190), .enabled = s.sound }, cx.listenerWith(Choice.pack, SettingsView.onChoice), null))
-            .child(button(look, "preview", "Preview", s.sound, cx.listener(SettingsView.onPreview)));
+            .child(button(look, .preview, "Preview", s.sound, cx));
         const import_row = div().flex().flexRow().itemsCenter().gap(px(8))
-            .child(button(look, "import", "Import Pack…", true, cx.listener(SettingsView.onImport)));
+            .child(button(look, .import, "Import Pack…", true, cx));
         return prefs.page(window, look, &.{
             .{ .title = "Typing Sounds", .description = status, .rows = &.{
                 prefs.row("Typing Sounds", "Mechanical keyboard clicks as you type", sw("sound", s.sound, "Typing Sounds", cx, .sound)),
@@ -472,7 +473,7 @@ pub const SettingsView = struct {
         const s = &tb.settings;
         var ub: [128]u8 = undefined;
         const ustatus = zpui.fmt("{s}", .{update_hook.statusText(&ub)});
-        const check_row = div().flex().flexRow().itemsCenter().gap(px(8)).child(button(look, "check", update_hook.actionLabel(), true, cx.listener(SettingsView.onCheckNow)));
+        const check_row = div().flex().flexRow().itemsCenter().gap(px(8)).child(button(look, .check, update_hook.actionLabel(), true, cx));
         const general = [_]prefs.Row{
             prefs.row("Launch at Login", "Start typebud when you log in", sw("login", s.launch_at_login, "Launch at Login", cx, .launch_at_login)),
         };
@@ -589,15 +590,21 @@ pub const SettingsView = struct {
         cx.notify();
     }
 
-    fn onPreview(_: *SettingsView, _: *const zpui.ClickEvent, _: *Context(SettingsView)) void {
-        app_mod.instance.previewPack();
+    fn onAction(_: *SettingsView, a: Action, cx: *Context(SettingsView)) void {
+        switch (a) {
+            .preview => app_mod.instance.previewPack(),
+            .import => app_mod.instance.importPack(),
+            .check => {
+                update_hook.runAction();
+                cx.notify();
+            },
+        }
     }
-    fn onImport(_: *SettingsView, _: *const zpui.ClickEvent, _: *Context(SettingsView)) void {
-        app_mod.instance.importPack();
+    fn onActionClick(self: *SettingsView, a: Action, _: *const zpui.ClickEvent, cx: *Context(SettingsView)) void {
+        self.onAction(a, cx);
     }
-    fn onCheckNow(_: *SettingsView, _: *const zpui.ClickEvent, cx: *Context(SettingsView)) void {
-        update_hook.runAction();
-        cx.notify();
+    fn onActionPress(self: *SettingsView, a: Action, _: *const Ev, cx: *Context(SettingsView)) void {
+        self.onAction(a, cx);
     }
 };
 
@@ -610,7 +617,21 @@ fn swEnabled(id: []const u8, on: bool, label: []const u8, enabled: bool, cx: *Co
 }
 
 /// A push button in the family's look (zpui has no native push-button control yet).
-fn button(look: prefs.Look, id: []const u8, label: []const u8, enabled: bool, listener: anytype) zpui.StatefulDiv {
+/// zpui with `nativeButton` (NSButton push buttons).
+const has_native_button = @hasDecl(zpui, "nativeButton");
+
+/// A push button: on macOS an NSButton (the Liquid Glass bezel on macOS 26+) where zpui
+/// has native buttons, else drawn in the look's style.
+fn button(look: prefs.Look, action: Action, label: []const u8, enabled: bool, cx: *Context(SettingsView)) zpui.AnyElement {
+    const id = @tagName(action);
+    const drawn = drawnButton(look, id, label, enabled, cx.listenerWith(action, SettingsView.onActionClick));
+    if (comptime has_native_button) {
+        if (look.family == .macos) return zpui.intoAnyElement(zpui.nativeButton(id, .{ .title = label, .enabled = enabled, .bezel = .glass }, cx.listenerWith(action, SettingsView.onActionPress), drawn));
+    }
+    return zpui.intoAnyElement(drawn);
+}
+
+fn drawnButton(look: prefs.Look, id: []const u8, label: []const u8, enabled: bool, listener: anytype) zpui.StatefulDiv {
     const mac = look.family == .macos;
     var b = div().id(id).flex().itemsCenter().justifyCenter().h(px(if (mac) 22 else look.control_height)).px(px(if (mac) 10 else 14))
         .rounded(px(look.button_radius)).bg(look.button_bg).textColor(look.fg).role(.button).ariaLabel(label)
