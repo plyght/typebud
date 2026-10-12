@@ -185,4 +185,5 @@ test {
     _ = @import("launch_at_login.zig");
     _ = @import("update_hook.zig");
     _ = @import("updates.zig");
+    _ = @import("onboarding.zig");
 }

@@ -28,6 +28,8 @@ pub const Timing = struct {
     rate_window: u64 = 3 * s,
     /// Length of the per-keystroke squash.
     bump_len: u64 = 140 * ms,
+    /// Length of a greeting hop (`hop`).
+    hop_len: u64 = 460 * ms,
 };
 
 pub const Config = struct {
@@ -71,6 +73,8 @@ pub const PetState = struct {
     sip_at: u64 = 0,
     sip_until: u64 = 0,
     bump_at: u64 = 0,
+    /// Start of a greeting hop (0 = none; may be slightly in the future).
+    hop_at: u64 = 0,
     keys: [ring_len]u64 = @splat(0),
     key_head: usize = 0,
     key_count: usize = 0,
@@ -126,6 +130,14 @@ pub const PetState = struct {
 
     pub fn wpm(p: *const PetState, now: u64) f32 {
         return p.rate(now, p.timing.rate_window) * 60.0 / 5.0;
+    }
+
+    /// A little greeting hop (the pet appearing, the welcome's steps). Not with reduced
+    /// motion.
+    pub fn hop(p: *PetState, at: u64) void {
+        if (!p.config.animations) return;
+        p.hop_at = at;
+        p.generation += 1;
     }
 
     /// A key went down (key-ups don't animate).
@@ -303,6 +315,11 @@ pub const PetState = struct {
             squash = 0.025 * k;
             dy = 1.2 * k;
         }
+        if (p.hop_at != 0 and now >= p.hop_at and now - p.hop_at < p.timing.hop_len) {
+            const t = @as(f32, @floatFromInt(now - p.hop_at)) / @as(f32, @floatFromInt(p.timing.hop_len));
+            dy += hopOffset(t);
+            squash -= 0.03 * @sin(t * std.math.pi); // a little stretch in the air
+        }
         if (p.mode == .excited) {
             const phase = @as(f32, @floatFromInt(now % (400 * ms))) / @as(f32, 400 * ms);
             dy -= 3.0 * @abs(@sin(phase * std.math.pi));
@@ -314,9 +331,16 @@ pub const PetState = struct {
     pub fn animating(p: *const PetState, now: u64) bool {
         if (!p.config.animations) return false;
         if (p.mode == .excited) return true;
+        if (p.hop_at != 0 and now < p.hop_at + p.timing.hop_len) return true;
         return p.bump_at != 0 and now -| p.bump_at < p.timing.bump_len;
     }
 };
+
+/// Height of a hop at `t` in 0..1 (viewBox units, negative = up): one soft arc.
+pub fn hopOffset(t: f32) f32 {
+    const x = std.math.clamp(t, 0, 1);
+    return -16 * @sin(x * std.math.pi) * (1 - 0.25 * x);
+}
 
 // ---- tests ------------------------------------------------------------------------------
 
@@ -482,4 +506,18 @@ test "keystroke bump decays within 140 ms" {
     try testing.expect(p.animating(5 * s + 10 * ms));
     try testing.expect(p.motion(5 * s).squash > 0);
     try testing.expect(!p.animating(5 * s + 140 * ms));
+}
+
+test "hop: arcs up and lands, animates only while it lasts, never with reduced motion" {
+    var p = PetState.init(1000, .{});
+    p.hop(2000);
+    try testing.expect(p.animating(2000));
+    const mid = p.motion(2000 + p.timing.hop_len / 2);
+    try testing.expect(mid.dy < -10);
+    try testing.expect(!p.animating(2000 + p.timing.hop_len + 1));
+    try testing.expectEqual(@as(f32, 0), p.motion(2000 + p.timing.hop_len + 1).dy);
+    var still = PetState.init(1000, .{ .animations = false });
+    still.hop(2000);
+    try testing.expect(!still.animating(2000));
+    try testing.expectEqual(@as(f32, 0), still.motion(2100).dy);
 }

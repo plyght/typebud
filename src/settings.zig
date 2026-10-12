@@ -110,6 +110,11 @@ pub const Settings = struct {
     launch_at_login: bool = false,
     precise_input: bool = false,
     auto_update: bool = true,
+    // Welcome
+    /// The first-run welcome was finished or skipped.
+    onboarding_done: bool = false,
+    /// `onboarding.version` it was finished at.
+    onboarding_version: u32 = 0,
 
     pub fn outfit(s: *const Settings) art.Outfit {
         return .{
@@ -191,6 +196,9 @@ const Json = struct {
     launch_at_login: bool = false,
     precise_input: bool = false,
     auto_update: bool = true,
+    /// Files written before the welcome existed lack this: those users skip it.
+    onboarding_done: bool = true,
+    onboarding_version: u32 = 0,
 };
 
 pub fn fromJson(gpa: Allocator, bytes: []const u8) !Settings {

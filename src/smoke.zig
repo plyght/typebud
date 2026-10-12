@@ -13,6 +13,7 @@ const script = @import("script.zig");
 const snapshot = @import("snapshot.zig");
 const pet_view = @import("pet_view.zig");
 const settings_view = @import("settings_view.zig");
+const onboarding = @import("onboarding.zig");
 const capture = @import("capture.zig");
 const clock = @import("clock.zig");
 
@@ -33,6 +34,8 @@ const State = struct {
     report: std.ArrayList(u8) = .empty,
     section: usize = 0,
     look: usize = 0,
+    welcome_step: usize = 0,
+    welcome_look: usize = 0,
 };
 var st: State = .{};
 
@@ -249,6 +252,91 @@ fn sSettingsShot(tb: *Typebud) void {
     }
 }
 
+// ---- the first-run welcome -------------------------------------------------------------
+
+fn sWelcomeOpen(tb: *Typebud) void {
+    if (tb.settingsWindow()) |w| w.removeWindow();
+    tb.settings.head = .none;
+    tb.settings.sensitivity = .eager;
+    tb.settings.onboarding_done = false;
+    tb.settingsChanged();
+    if (!onboarding.shouldShow(&tb.settings)) fail(tb, "welcome: a fresh install should show it", .{});
+    onboarding.open(tb, .first_run);
+    if (onboarding.window(tb) == null) return fail(tb, "welcome window did not open", .{});
+    if (tb.settings.sound) fail(tb, "welcome: sounds should start off on the first run", .{});
+    if (tb.isShown()) fail(tb, "welcome: the pet should wait while the welcome is open", .{});
+}
+
+/// Per look: choices a user might make, so the screenshots show variety.
+fn sWelcomeStep(tb: *Typebud) void {
+    const w = onboarding.window(tb) orelse return fail(tb, "welcome window closed early", .{});
+    const step: onboarding.Step = @enumFromInt(st.welcome_step);
+    const lk = looks[st.welcome_look];
+    var t = w.desktopTheme();
+    if (builtin.os.tag == .linux) t.style = if (lk.style == .none) .adwaita else lk.style;
+    t.dark = lk.dark;
+    w.setDesktopTheme(t);
+    if (builtin.os.tag == .macos) w.glass_dark = lk.dark;
+    const s = &tb.settings;
+    const animals = [_][]const u8{ "cat", "shiba", "penguin" };
+    const vibes = [_]art.Vibe{ .pink, .dark, .bright };
+    const heads = [_]art.HeadItem{ .headphones, .beanie, .none };
+    switch (step) {
+        .buddy => s.animal.set(animals[st.welcome_look]),
+        .vibe => {
+            s.vibe = vibes[st.welcome_look];
+            s.head = heads[st.welcome_look];
+            if (st.welcome_look == 2) s.held = .coffee;
+        },
+        .sounds => s.sound = st.welcome_look != 1,
+        else => {},
+    }
+    tb.settingsChanged();
+    onboarding.goTo(tb, step);
+    onboarding.refresh(tb);
+}
+
+fn sWelcomeType(tb: *Typebud) void {
+    // ~150 WPM for ~3 s: fast enough to get excited (and burst into sparkles).
+    onboarding.clearText();
+    onboarding.scriptType(tb, "hello little buddy, typing along with you is so much fun!", 65);
+}
+
+fn sWelcomeShot(tb: *Typebud) void {
+    const w = onboarding.window(tb) orelse return;
+    const step: onboarding.Step = @enumFromInt(st.welcome_step);
+    if (step == .typing) {
+        if (onboarding.keysSeen() == 0) fail(tb, "welcome: the preview pet saw no keys", .{});
+        if (onboarding.typedText().len == 0) fail(tb, "welcome: the try-it field stayed empty", .{});
+        note(tb, "welcome try-it: {d} keys, preview pet {t}", .{ onboarding.keysSeen(), onboarding.previewMode() });
+    }
+    var pb: [128]u8 = undefined;
+    const path = std.fmt.bufPrint(&pb, out_dir ++ "/onboarding_{s}_{d}_{s}.png", .{ looks[st.welcome_look].name, st.welcome_step + 1, onboarding.Step.slugs[st.welcome_step] }) catch return;
+    if (capture.captureWindow(tb.gpa, tb.io, w)) |img| {
+        defer tb.gpa.free(img.pixels);
+        snapshot.writeRgbaPng(tb.gpa, tb.io, path, img.pixels, img.width, img.height) catch |e| fail(tb, "{s}: {t}", .{ path, e });
+        note(tb, "wrote {s} ({d}x{d})", .{ path, img.width, img.height });
+    } else |e| note(tb, "welcome capture unavailable here: {t}", .{e});
+    st.welcome_step += 1;
+    if (st.welcome_step == onboarding.Step.count) {
+        st.welcome_step = 0;
+        st.welcome_look += 1;
+    }
+}
+
+fn sWelcomeFinish(tb: *Typebud) void {
+    onboarding.finish(tb);
+    if (onboarding.window(tb) != null) fail(tb, "welcome window still open after Done", .{});
+    if (!tb.settings.onboarding_done or tb.settings.onboarding_version != onboarding.version) fail(tb, "welcome: not remembered as done", .{});
+    if (onboarding.shouldShow(&tb.settings)) fail(tb, "welcome: would show again", .{});
+    if (!tb.isShown()) fail(tb, "welcome: the pet did not come back", .{});
+}
+
+fn sWelcomeHop(tb: *Typebud) void {
+    if (!tb.state.animating(tb.now())) fail(tb, "welcome: the pet did not hop in", .{});
+    snapLive(tb, "7_hop");
+}
+
 fn sDesktop(tb: *Typebud) void {
     if (builtin.os.tag != .linux) return;
     const res = std.process.run(tb.gpa, tb.io, .{ .argv = &.{ "import", "-window", "root", out_dir ++ "/desktop.png" } }) catch return;
@@ -288,6 +376,23 @@ const section_steps = blk: {
     break :blk list;
 };
 
+const welcome_steps = blk: {
+    const per_look = onboarding.Step.count * 2 + 1;
+    var list: [looks.len * per_look]script.Step = undefined;
+    var n: usize = 0;
+    for (0..looks.len) |_| for (0..onboarding.Step.count) |i| {
+        list[n] = .{ .wait_ms = 120, .run = sWelcomeStep };
+        n += 1;
+        if (i == @intFromEnum(onboarding.Step.typing)) {
+            list[n] = .{ .wait_ms = 350, .run = sWelcomeType };
+            n += 1;
+            list[n] = .{ .wait_ms = 3500, .run = sWelcomeShot };
+        } else list[n] = .{ .wait_ms = 650, .run = sWelcomeShot };
+        n += 1;
+    };
+    break :blk list[0..n].*;
+};
+
 const steps = [_]script.Step{
     .{ .run = sWatchdogArm },
     .{ .run = sLaunch },
@@ -305,7 +410,10 @@ const steps = [_]script.Step{
     .{ .wait_ms = 800, .run = sResized },
     .{ .wait_ms = 300, .run = sDesktop },
     .{ .run = sMatrix },
-} ++ section_steps;
+} ++ section_steps ++ [_]script.Step{.{ .wait_ms = 300, .run = sWelcomeOpen }} ++ welcome_steps ++ [_]script.Step{
+    .{ .wait_ms = 300, .run = sWelcomeFinish },
+    .{ .wait_ms = 330, .run = sWelcomeHop },
+};
 
 pub fn start(tb: *Typebud, code: *u8) void {
     st = .{ .code = code };

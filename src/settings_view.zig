@@ -51,7 +51,7 @@ pub const Section = enum {
 const Toggle = enum(u8) { keyboard, desk_plant, desk_lamp, desk_mug, sparkles, animations, sound, key_up, mute_other_audio, mute_mic, remember_visible, launch_at_login, precise_input, auto_update };
 const Choice = enum(u8) { vibe, head, held, corner, display, sleep, sensitivity, pack, visibility, size_preset };
 const Value = enum(u8) { size, volume };
-const Action = enum(u8) { preview, import, check };
+const Action = enum(u8) { preview, import, check, welcome };
 
 const sleep_choices = [_]u32{ 0, 30, 60, 120, 300, 600 };
 const sleep_labels = [_][]const u8{ "Never", "30 seconds", "1 minute", "2 minutes", "5 minutes", "10 minutes" };
@@ -476,6 +476,7 @@ pub const SettingsView = struct {
         const check_row = div().flex().flexRow().itemsCenter().gap(px(8)).child(button(look, .check, update_hook.actionLabel(), true, cx));
         const general = [_]prefs.Row{
             prefs.row("Launch at Login", "Start typebud when you log in", sw("login", s.launch_at_login, "Launch at Login", cx, .launch_at_login)),
+            prefs.row("Welcome", "Replay the quick hello and setup", div().flex().flexRow().itemsCenter().child(button(look, .welcome, "Show Welcome Again", true, cx))),
         };
         const perm = tb.app.inputPermission();
         const precise_sub = zpui.fmt("Needs Input Monitoring permission · {s}", .{switch (perm) {
@@ -598,6 +599,7 @@ pub const SettingsView = struct {
                 update_hook.runAction();
                 cx.notify();
             },
+            .welcome => @import("onboarding.zig").open(app_mod.instance, .again),
         }
     }
     fn onActionClick(self: *SettingsView, a: Action, _: *const zpui.ClickEvent, cx: *Context(SettingsView)) void {

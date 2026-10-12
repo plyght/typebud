@@ -29,6 +29,7 @@ const clock = @import("clock.zig");
 const pack_import = @import("pack_import.zig");
 const placement = @import("placement.zig");
 const launch_at_login = @import("launch_at_login.zig");
+const onboarding = @import("onboarding.zig");
 
 const App = zpui.App;
 const Window = zpui.Window;
@@ -43,6 +44,7 @@ pub const ToggleVisible = zpui.action("typebud::ToggleVisible");
 pub const TogglePause = zpui.action("typebud::TogglePause");
 pub const OpenSettings = zpui.action("typebud::OpenSettings");
 pub const CheckUpdates = zpui.action("typebud::CheckUpdates");
+pub const ShowWelcome = zpui.action("typebud::ShowWelcome");
 pub const Quit = zpui.action("typebud::Quit");
 
 pub const Options = struct {
@@ -198,6 +200,7 @@ pub const Typebud = struct {
         app.onAction(TogglePause, self, onTogglePause) catch {};
         app.onAction(OpenSettings, self, onOpenSettings) catch {};
         app.onAction(CheckUpdates, self, onCheckUpdates) catch {};
+        app.onAction(ShowWelcome, self, onShowWelcome) catch {};
         app.onAction(Quit, self, onQuit) catch {};
         // ⌘, opens (or raises) Settings from any typebud window, as in every Mac app.
         if (builtin.os.tag == .macos) app.bindKeys(&.{.init("cmd-,", OpenSettings{}, null)}) catch {};
@@ -224,7 +227,9 @@ pub const Typebud = struct {
         }
         self.updateSynthKeyUp();
         self.rearm();
-        if (self.options.open_settings or (!self.tray_ok and !self.options.scripted)) self.openSettings();
+        if (!self.options.scripted and onboarding.shouldShow(&self.settings)) {
+            onboarding.open(self, .first_run);
+        } else if (self.options.open_settings or (!self.tray_ok and !self.options.scripted)) self.openSettings();
     }
 
     fn openPetWindow(self: *Typebud) !void {
@@ -451,7 +456,7 @@ pub const Typebud = struct {
     // ---- visibility ---------------------------------------------------------------------
 
     pub fn isShown(self: *const Typebud) bool {
-        return self.user_visible and self.rule_visible;
+        return self.user_visible and self.rule_visible and !onboarding.hidesPet();
     }
 
     pub fn updateVisibility(self: *Typebud) void {
@@ -683,6 +688,7 @@ pub const Typebud = struct {
             zpui.MenuItem.action("Pause Reactions", TogglePause{}).checkedIf(self.paused),
             .separator,
             .action("Settings…", OpenSettings{}),
+            .action("Welcome Tour…", ShowWelcome{}),
             .action("Check for Updates…", CheckUpdates{}),
             .separator,
             .action("Quit typebud", Quit{}),
@@ -798,6 +804,9 @@ pub const Typebud = struct {
     }
     fn onCheckUpdates(_: *Typebud, _: *const CheckUpdates, _: *App) void {
         update_hook.checkNow(true);
+    }
+    fn onShowWelcome(self: *Typebud, _: *const ShowWelcome, _: *App) void {
+        onboarding.open(self, .again);
     }
     fn onQuit(self: *Typebud, _: *const Quit, app: *App) void {
         self.flushSave();

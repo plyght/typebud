@@ -13,6 +13,7 @@ const app_mod = @import("app.zig");
 const script = @import("script.zig");
 const sound = @import("sound.zig");
 const settings_view = @import("settings_view.zig");
+const onboarding = @import("onboarding.zig");
 
 const Typebud = app_mod.Typebud;
 const Window = zpui.Window;
@@ -191,6 +192,7 @@ fn sHeadItems(tb: *Typebud) void {
     caption(tb, "…and hats: beanie, party hat, bow, glasses");
     tb.settings.head = .beanie;
     set(tb);
+    onboarding.refresh(tb);
 }
 fn sParty(tb: *Typebud) void {
     tb.settings.head = .party_hat;
@@ -352,6 +354,40 @@ fn sTray(tb: *Typebud) void {
     if (tb.settingsWindow()) |w| w.removeWindow();
     caption(tb, if (tb.tray_ok) "Menu bar / tray: show or hide, pause reactions, settings, updates" else "Tray menu: show / hide, pause reactions, settings, updates");
 }
+// The first-run welcome, replayed as from the tray's "Welcome Tour…".
+fn sWelcome(tb: *Typebud) void {
+    caption(tb, "First launch: a quick, cozy hello");
+    onboarding.open(tb, .again);
+}
+fn sWelcomeNext(tb: *Typebud) void {
+    onboarding.goTo(tb, onboarding.currentStep().next());
+}
+fn sWelcomeShiba(tb: *Typebud) void {
+    caption(tb, "Pick a buddy, a vibe and sounds, one tap each");
+    tb.settings.animal.set("shiba");
+    set(tb);
+    onboarding.refresh(tb);
+}
+fn sWelcomePink(tb: *Typebud) void {
+    onboarding.goTo(tb, .vibe);
+    tb.settings.vibe = .pink;
+    tb.settings.head = .beanie;
+    set(tb);
+    onboarding.refresh(tb);
+}
+fn sWelcomeTry(tb: *Typebud) void {
+    caption(tb, "Then try typing: the preview reacts live");
+    onboarding.goTo(tb, .typing);
+    onboarding.scriptType(tb, "hello little buddy, nice to meet you!", 70);
+}
+fn sWelcomeDone(tb: *Typebud) void {
+    caption(tb, "All set, and the pet hops into its corner");
+    onboarding.finish(tb);
+    tb.settings.animal.set("cat");
+    tb.settings.vibe = .dark;
+    tb.settings.head = .none;
+    set(tb);
+}
 fn sOutro(tb: *Typebud) void {
     caption(tb, "typebud · macOS, Windows and Linux");
     st.typist.start(tb, .prose, 12, 160);
@@ -432,7 +468,14 @@ const steps = [_]script.Step{
     .{ .wait_ms = 1300, .run = sSecSystem },
     .{ .wait_ms = 1200, .run = sSecCredits },
     .{ .wait_ms = 1200, .run = sTray },
-    .{ .wait_ms = 1800, .run = sOutro },
+    .{ .wait_ms = 1600, .run = sWelcome },
+    .{ .wait_ms = 1700, .run = sWelcomeNext },
+    .{ .wait_ms = 1100, .run = sWelcomeShiba },
+    .{ .wait_ms = 900, .run = sWelcomePink },
+    .{ .wait_ms = 1100, .run = sWelcomeTry },
+    .{ .wait_ms = 3400, .run = sWelcomeNext },
+    .{ .wait_ms = 1500, .run = sWelcomeDone },
+    .{ .wait_ms = 1600, .run = sOutro },
     .{ .wait_ms = 2200, .run = sEnd },
 };
 
